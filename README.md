@@ -64,15 +64,29 @@
 ### Local storage
 
 #### Built-in Events
-- `fog-update`: emitted if there is an update to the fog nodes, i.e. new fog(s), updated fog(s), or both
+- `ls-fog-update`: emitted if there is an update to the fog nodes, i.e. new fog(s), updated fog(s), or both
     - arguments:
         - object: {
-            newFogs: [array of new fogs],
-            updatedFogs: [array of updated fogs]
+            newFogs: {object of new fog ids to times},
+            updatedFogs: {object of updated fog ids to times}
         }
-- `cloud-update`: emitted if there is an update to the cloud nodes, i.e. new cloud(s), updated cloud(s), or both
+- `ls-cloud-update`: emitted if there is an update to the cloud nodes, i.e. new cloud(s), updated cloud(s), or both
     - arguments:
         - object: {
-            newClouds: [array of new clouds],
-            updatedClouds: [array of updated clouds]
+            newClouds: {object of new cloud ids to times},
+            updatedClouds: {object of updated cloud ids to times}
+        }
+
+### Registrar
+- `fogs-up`: emitted when some fogs have gone up
+    - arguments:
+        - object: {
+            new: {object of new fog ids to ip/port},
+            updated: {object of updated fog ids to ip/port}
+        }
+- `clouds-up`: emitted when some clouds have gone up
+    - arguments:
+        - object: {
+            new: {object of new cloud ids to ip/port},
+            updated: {object of updated cloud ids to ip/port}
         }

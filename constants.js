@@ -24,6 +24,9 @@ module.exports = {
     },
 
     localStorage: {
-        scanInterval: 2000
+        nodeScanInterval: 3000, // 3 seconds
+        queryResponseInterval: 500, // 500 ms
+        queryRetries: 10,
+        queryRetryTimeout: 100 // 100 ms
     }
 }

@@ -1,5 +1,6 @@
 
 var EventEmitter = require('events'),
+    asc = require('async'),
     MQTTRegistry = require('./mqttregistry'),
     MDNSRegistry = require('./mdnsregistry'),
     LocalRegistry = require('./localregistry');
@@ -117,7 +118,76 @@ Registrar.prototype._registerWithMDNS = function() {
  * Registers a node using local storage
  */
 Registrar.prototype._registerWithLocalStorage = function() {
+    this.localRegistry = new LocalRegistry(this.app, this.machType, this.id, this.port);
 
+    var self = this;
+
+    /* triggered when a fog updates the local storage */
+    this.localRegistry.on('ls-fog-update', function(updates) {
+        // query all new and updated fogs for their updated information
+        self._ls_resolveNodes(updates.newFogs, updates.updatedFogs, 'fogs-up');
+    });
+
+    /* triggered when a cloud updates the local storage */
+    this.localRegistry.on('ls-cloud-update', function(updates) {
+        // query all new and updated clouds for their updated information
+        self._ls_resolveNodes(updates.newClouds, updates.updatedClouds, 'clouds-up');
+    });
+
+    this.localRegistry.register();
+}
+
+/**
+ * Local storage helper function for resolving IP/port of new/updated nodes
+ */
+Registrar.prototype._ls_resolveNodes = function(newNodes, updatedNodes, emitMessage) {
+    var self = this;
+    var newOutput = null;
+    var updatedOutput = null;
+    var output;
+    var c1 = 0;
+    var c2 = 0;
+    if (newNodes) {
+        newOutput = {};
+        for (var nodeId in newNodes) {
+            if (!newNodes.hasOwnProperty(nodeId)) continue;
+            c1++;
+            this.localRegistry.query(this.id, nodeId, function(err, portAndIp) {
+                if (!err) {
+                    newOutput[nodeId] = portAndIp;
+                }
+                c1--;
+                if (c1 === 0 && c2 === 0) {
+                    output = {
+                        new: newOutput,
+                        updated: updatedOutput
+                    };
+                    self.emit(emitMessage, output);
+                }
+            });
+        }
+    }
+
+    if (updatedNodes) {
+        updatedOutput = {};
+        for (var nodeId in updatedNodes) {
+            if (!updatedNodes.hasOwnProperty(nodeId)) continue;
+            c2++;
+            this.localRegistry.query(this.id, nodeId, function(err, portAndIp) {
+                if (!err) {
+                    updatedOutput[nodeId] = portAndIp;
+                }
+                c2--;
+                if (c1 === 0 && c2 === 0) {
+                    output = {
+                        new: newOutput,
+                        updated: updatedOutput
+                    };
+                    self.emit(emitMessage, output);
+                }
+            });
+        }
+    }
 }
 
 /* exports */
