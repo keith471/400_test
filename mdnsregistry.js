@@ -12,7 +12,6 @@ function MDNSRegistry(app, machType, id, port) {
     this.machType = machType;
     this.id = id;
     this.port = port;
-    this.ip = this._getIPv4Address();
 }
 
 /* MDNSRegistry inherits from Registry */
@@ -22,37 +21,13 @@ MDNSRegistry.prototype = new Registry();
  * mDNS registration consists of advertisement creation followed by service browsing
  */
 MDNSRegistry.prototype.register = function() {
-    this.createAdvertisement();
-    this.browse();
+    this._createAdvertisement(constants.mdns.retries);
+    this._browse();
 }
 
 //------------------------------------------------------------------------------
 // Advertisement creation
 //------------------------------------------------------------------------------
-
-/**
- * Public interface for creating an advertisement. Creates the advertisement and
- * starts a timer to check the IP address every so often so that we can update the
- * advertisement if need be
- */
-MDNSRegistry.prototype.createAdvertisement = function() {
-    this._createAdvertisement(constants.mdns.retries);
-    var self = this;
-    // I'm not sure if this is strictly needed. It may be that the IP address
-    // announced in the advertisement is updated immediately, in which case we would't need
-    // to do this, but we'd still need to make sure that other nodes are made aware of the
-    // ip change
-    setInterval(function() {
-        var oldIp = self.ip;
-        self.ip = self._getIPv4Address();
-        if (oldIp !== self.ip) {
-            // tear down the existing advertisement
-            self.ad.stop();
-            // put up a new one
-            self._createAdvertisement(constants.mdns.retries);
-        }
-    }, constants.mdns.ipCheckInterval);
-}
 
 /**
  * Attempts to create an mDNS advertisement up to `retries` times
@@ -101,7 +76,7 @@ MDNSRegistry.prototype._handleError = function(err, retries) {
 /**
  * Browses for services
  */
-MDNSRegistry.prototype.browse = function() {
+MDNSRegistry.prototype._browse = function() {
     // the serice a node browses for depends on the type of the node
     /* create the browser */
     var browser;
@@ -109,51 +84,62 @@ MDNSRegistry.prototype.browse = function() {
     if (this.machType === constants.globals.NodeType.DEVICE) {
         // devices browse for fogs
         browser = mdns.createBrowser(mdns.tcp(this.app + '-' + constants.globals.NodeType.FOG));
+
         browser.on('serviceUp', function(service) {
-            /* emit the id, port, and IP address of the fog to the rest of the application */
-            // possible that _getIp returns null
-            var fogIp = self._getIp(service.addresses);
-            if (fogIp === null) {
-                // ignore the fog
-                // TODO might want to modify this behavior
+            // ignore our own services
+            if (service.name == self.id) {
                 return;
             }
-            var retVal = {
-                port: service.port, // int
-                ip: fogIp, // string
-                id: service.name // string
-            };
+            /* emit the id, port, and IP address of the fog to the rest of the application */
+            var retVal = self._getServiceData(service);
+            if (retVal === null) {
+                return;
+            }
             self.emit('mdns-fog-up', retVal);
         });
+
         browser.on('serviceDown', function(service) {
             self.emit('mdns-fog-down', service.name);
         });
+
     } else if (this.machType === constants.globals.NodeType.FOG) {
         // fogs browse for clouds
         browser = mdns.createBrowser(mdns.tcp(this.app + '-' + constants.globals.NodeType.CLOUD));
+
         browser.on('serviceUp', function(service) {
-            /* emit the id, port, and IP address of the cloud to the rest of the application */
-            // possible that _getIp returns null
-            var cloudIp = self._getIp(service.addresses);
-            if (cloudIp === null) {
-                // ignore this cloud...
-                // TODO might want to modify this behavior
+            // ignore our own services
+            if (service.name == self.id) {
                 return;
             }
-            var retVal = {
-                port: service.port, // int
-                ip: cloudIp, // string
-                id: service.name // string
-            };
+            /* emit the id, port, and IP address of the cloud to the rest of the application */
+            var retVal = self._getServiceData(service);
+            if (retVal === null) {
+                return;
+            }
             self.emit('mdns-cloud-up', retVal);
         });
+
         browser.on('serviceDown', function(service) {
             self.emit('mdns-cloud-down', service.name);
         });
+
     }
     // NOTE: clouds don't browse for anyone
     /* start the browser */
     browser.start();
+}
+
+MDNSRegistry.prototype._getServiceData = function(service) {
+    var ip = this._getIp(service.addresses);
+    // possible that _getIp returns null
+    if (ip === null) {
+        return null;
+    }
+    return {
+        id: service.name, // string
+        port: service.port, // int
+        ip: ip // string
+    };
 }
 
 /**
@@ -181,7 +167,7 @@ MDNSRegistry.prototype._getIp = function(addresses) {
 /**
  * A public helper to quit advertising
  */
-MDNSRegistry.prototype.stopAdvertising = function() {
+MDNSRegistry.prototype.incognito = function() {
     this.ad.stop();
 }
 
