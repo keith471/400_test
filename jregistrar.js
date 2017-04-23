@@ -1,5 +1,6 @@
 
 var EventEmitter = require('events'),
+    constants = require('./constants');
     MQTTRegistry = require('./mqttregistry'),
     MDNSRegistry = require('./mdnsregistry'),
     LocalRegistry = require('./localregistry');
@@ -38,31 +39,29 @@ Registrar.prototype._registerWithMQTT = function() {
     var self = this;
 
     this.mqttRegistry.on('mqtt-fog-up', function(fogId) {
+        // query for the connection info of the fog
+        self.mqttRegistry.query(constantsglobals.NodeType.FOG, fogId);
+    });
 
+    this.mqttRegistry.on('mqtt-fog-ipandport', function(fog) {
+        self.emit('fog-up', fog);
     });
 
     this.mqttRegistry.on('mqtt-fog-down', function(fogId) {
-
+        self.emit('fog-down', fogId);
     });
 
     this.mqttRegistry.on('mqtt-cloud-up', function(cloudId) {
+        // query for the connection info of the cloud
+        self.mqttRegistry.query(constantsglobals.NodeType.CLOUD, cloudId);
+    });
 
+    this.mqttRegistry.on('mqtt-cloud-ipandport', function(cloud) {
+        self.emit('cloud-up', cloud);
     });
 
     this.mqttRegistry.on('mqtt-cloud-down', function(cloudId) {
-
-    });
-
-    this.mqttRegistry.on('mqtt-node-up', function() {
-
-    });
-
-    this.mqttRegistry.on('mqtt-node-reconnect', function() {
-
-    });
-
-    this.mqttRegistry.on('mqtt-node-down', function() {
-
+        self.emit('cloud-down', cloudId);
     });
 
     /* something went wrong with MQTT registration */
@@ -88,25 +87,29 @@ Registrar.prototype._registerWithMDNS = function() {
 
     var self = this;
 
+    /* if mdns error, fall back on local storage */
     this.mdnsRegistry.on('mdns-ad-error', function(err) {
-        // fall back on local storage
         self._registerWithLocalStorage();
     });
 
+    /* triggered when a fog goes up */
     this.mdnsRegistry.on('mdns-fog-up', function(fog) {
-
+        self.emit('fog-up', fog);
     });
 
+    /* triggered when a fog goes down */
     this.mdnsRegistry.on('mdns-fog-down', function(fogId) {
-
+        self.emit('fog-down', fogId);
     });
 
+    /* triggered when a cloud goes up */
     this.mdnsRegistry.on('mdns-cloud-up', function(cloud) {
-
+        self.emit('cloud-up', cloud);
     });
 
+    /* triggered when a cloud goes down */
     this.mdnsRegistry.on('mdns-cloud-down', function(cloudId) {
-
+        self.emit('cloud-down', cloudId);
     });
 
     // initiate mDNS registration

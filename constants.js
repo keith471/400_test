@@ -12,7 +12,7 @@ module.exports = {
     },
 
     mqtt: {
-        keepAlive: 30, // 30 seconds
+        keepAlive: 10, // 10 seconds
         connectionTimeout: 10000, // 10 seconds
         brokerUrl: 'tcp://localhost:1883'
     },

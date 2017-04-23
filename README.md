@@ -8,18 +8,29 @@
 -  `mqtt-fog-up`: emitted when a fog comes online
     - arguments:
         - [string] ID of the fog
+- `mqtt-fog-ipandport`: emitted when the ip and port of a fog are resolved
+    - arguments:
+        - object: {
+            ip: [string] ip address of fog,
+            port: [int] port of fog,
+            id: [string] id of fog
+        }
 - `mqtt-fog-down`: emitted when a fog goes offline
     - arguments:
         - [string] ID of the fog
 - `mqtt-cloud-up`: emitted when a cloud comes online
     - arguments:
         - [string] ID of the cloud
+- `mqtt-cloud-ipandport`: emitted when the ip and port of a cloud are resolved
+    - arguments:
+        - object: {
+            ip: [string] ip address of cloud,
+            port: [int] port of cloud,
+            id: [string] id of cloud
+        }
 - `mqtt-cloud-down`: emitted when a cloud goes offline
     - arguments
         - [string] ID of the cloud
-- `mqtt-node-reconnect`: emitted when the current node reconnects to the broker
-- `mqtt-node-up`: emitted when the current node first connects to the broker
-- `mqtt-node-down`: emitted when the current node goes offline
 - `mqtt-reg-error`: emitted when something goes wrong during MQTT registration; if this happens then the node should give up on MQTT and fall back to mDNS or local storage
     - arguments:
         - [error] the error
@@ -89,4 +100,18 @@
         - object: {
             new: {object of new cloud ids to ip/port},
             updated: {object of updated cloud ids to ip/port}
+        }
+- `fog-up`: emitted when a fog node has gone up
+    - arguments:
+        - object: {
+            ip: [string] ip address of node,
+            port: [int] port of node,
+            id: [string] id of node
+        }
+- `fog-down`: emitted when a fog node has gone down
+    - arguments:
+        - object: {
+            ip: [string] ip address of node,
+            port: [int] port of node,
+            id: [string] id of node
         }
