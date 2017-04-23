@@ -1,6 +1,5 @@
 
 var EventEmitter = require('events'),
-    asc = require('async'),
     MQTTRegistry = require('./mqttregistry'),
     MDNSRegistry = require('./mdnsregistry'),
     LocalRegistry = require('./localregistry');

@@ -1,6 +1,5 @@
 # TODO
 
-- try to compile and fix any errors
     - then branch
 - see if you can use multiple mdns advertisements, or what the behavior of an advertisement is on node failure
     - use this information to see if you need to modify the way info is discovered with mdns (fit it to announce/query protocol)

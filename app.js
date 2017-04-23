@@ -1,3 +1,3 @@
-var Registrar = require('./registrar');
+var Registrar = require('./jregistrar');
 
 console.log('it compiles');
