@@ -1,8 +1,6 @@
 # TODO
 
-- better unify the events emitted to the end application for each protocol
 - come up with a way to test!
-
 
 
 ## Notes on mDNS

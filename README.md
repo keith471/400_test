@@ -78,14 +78,14 @@
 - `ls-fog-update`: emitted if there is an update to the fog nodes, i.e. new fog(s), updated fog(s), or both
     - arguments:
         - object: {
-            newFogs: {object of new fog ids to times},
-            updatedFogs: {object of updated fog ids to times}
+            newFogs: [list of fog ids],
+            updatedFogs: [list of fog ids]
         }
 - `ls-cloud-update`: emitted if there is an update to the cloud nodes, i.e. new cloud(s), updated cloud(s), or both
     - arguments:
         - object: {
-            newClouds: {object of new cloud ids to times},
-            updatedClouds: {object of updated cloud ids to times}
+            newClouds: [list of cloud ids],
+            updatedClouds: [list of cloud ids]
         }
 
 ### Registrar

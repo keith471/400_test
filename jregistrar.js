@@ -124,71 +124,46 @@ Registrar.prototype._registerWithLocalStorage = function() {
 
     var self = this;
 
-    /* triggered when a fog updates the local storage */
+    /* triggered when a fog (or fogs) updates the local storage */
     this.localRegistry.on('ls-fog-update', function(updates) {
-        // query all new and updated fogs for their updated information
-        self._ls_resolveNodes(updates.newFogs, updates.updatedFogs, 'fogs-up');
+        // announce the fogs that have gone offline
+        for (var i in updates.newlyOfflineFogs) {
+            self.emit('fog-down', updates.newlyOfflineFogs[i]);
+        }
+        // query all newly online fogs for their updated information
+        // and then announce it
+        if (updates.newlyOnlineFogs) {
+            self._ls_resolveNodes(updates.newlyOnlineFogs, 'fog-up');
+        }
     });
 
-    /* triggered when a cloud updates the local storage */
+    /* triggered when a cloud (or clouds) updates the local storage */
     this.localRegistry.on('ls-cloud-update', function(updates) {
-        // query all new and updated clouds for their updated information
-        self._ls_resolveNodes(updates.newClouds, updates.updatedClouds, 'clouds-up');
+        // announce the clouds that have gone offline
+        for (var i in updates.newlyOfflineClouds) {
+            self.emit('cloud-down', updates.newlyOfflineClouds[i]);
+        }
+        // query all newly online clouds for their updated information
+        // and then announce it
+        if (updates.newlyOnlineClouds) {
+            self._ls_resolveNodes(updates.newlyOnlineClouds, 'cloud-up');
+        }
     });
 
     this.localRegistry.register();
 }
 
 /**
- * Local storage helper function for resolving IP/port of new/updated nodes
+ * Local storage helper function for resolving IP/port of newly online nodes
  */
-Registrar.prototype._ls_resolveNodes = function(newNodes, updatedNodes, emitMessage) {
+Registrar.prototype._ls_resolveNodes = function(nodes, emitMessage) {
     var self = this;
-    var newOutput = null;
-    var updatedOutput = null;
-    var output;
-    var c1 = 0;
-    var c2 = 0;
-    if (newNodes) {
-        newOutput = {};
-        for (var nodeId in newNodes) {
-            if (!newNodes.hasOwnProperty(nodeId)) continue;
-            c1++;
-            this.localRegistry.query(this.id, nodeId, function(err, portAndIp) {
-                if (!err) {
-                    newOutput[nodeId] = portAndIp;
-                }
-                c1--;
-                if (c1 === 0 && c2 === 0) {
-                    output = {
-                        new: newOutput,
-                        updated: updatedOutput
-                    };
-                    self.emit(emitMessage, output);
-                }
-            });
-        }
-    }
-
-    if (updatedNodes) {
-        updatedOutput = {};
-        for (var nodeId in updatedNodes) {
-            if (!updatedNodes.hasOwnProperty(nodeId)) continue;
-            c2++;
-            this.localRegistry.query(this.id, nodeId, function(err, portAndIp) {
-                if (!err) {
-                    updatedOutput[nodeId] = portAndIp;
-                }
-                c2--;
-                if (c1 === 0 && c2 === 0) {
-                    output = {
-                        new: newOutput,
-                        updated: updatedOutput
-                    };
-                    self.emit(emitMessage, output);
-                }
-            });
-        }
+    for (var i in nodes) {
+        this.localRegistry.query(this.id, nodes[i], function(err, response) {
+            if (!err) {
+                self.emit(emitMessage, response);
+            }
+        });
     }
 }
 
