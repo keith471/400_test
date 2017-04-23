@@ -1,6 +1,6 @@
 
 var EventEmitter = require('events'),
-    constants = require('./constants');
+    globals = require('./constants').globals;
     MQTTRegistry = require('./mqttregistry'),
     MDNSRegistry = require('./mdnsregistry'),
     LocalRegistry = require('./localregistry');
@@ -40,7 +40,7 @@ Registrar.prototype._registerWithMQTT = function() {
 
     this.mqttRegistry.on('mqtt-fog-up', function(fogId) {
         // query for the connection info of the fog
-        self.mqttRegistry.query(constantsglobals.NodeType.FOG, fogId);
+        self.mqttRegistry.query(globals.NodeType.FOG, fogId);
     });
 
     this.mqttRegistry.on('mqtt-fog-ipandport', function(fog) {
@@ -53,7 +53,7 @@ Registrar.prototype._registerWithMQTT = function() {
 
     this.mqttRegistry.on('mqtt-cloud-up', function(cloudId) {
         // query for the connection info of the cloud
-        self.mqttRegistry.query(constantsglobals.NodeType.CLOUD, cloudId);
+        self.mqttRegistry.query(globals.NodeType.CLOUD, cloudId);
     });
 
     this.mqttRegistry.on('mqtt-cloud-ipandport', function(cloud) {

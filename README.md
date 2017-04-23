@@ -89,18 +89,6 @@
         }
 
 ### Registrar
-- `fogs-up`: emitted when some fogs have gone up
-    - arguments:
-        - object: {
-            new: {object of new fog ids to ip/port},
-            updated: {object of updated fog ids to ip/port}
-        }
-- `clouds-up`: emitted when some clouds have gone up
-    - arguments:
-        - object: {
-            new: {object of new cloud ids to ip/port},
-            updated: {object of updated cloud ids to ip/port}
-        }
 - `fog-up`: emitted when a fog node has gone up
     - arguments:
         - object: {
@@ -109,6 +97,20 @@
             id: [string] id of node
         }
 - `fog-down`: emitted when a fog node has gone down
+    - arguments:
+        - object: {
+            ip: [string] ip address of node,
+            port: [int] port of node,
+            id: [string] id of node
+        }
+- `cloud-up`: emitted when a cloud node has gone up
+    - arguments:
+        - object: {
+            ip: [string] ip address of node,
+            port: [int] port of node,
+            id: [string] id of node
+        }
+- `cloud-down`: emitted when a cloud node has gone down
     - arguments:
         - object: {
             ip: [string] ip address of node,
