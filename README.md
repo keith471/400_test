@@ -1,6 +1,7 @@
 # README
 
 ## To Run
+- if using MQTT, first start an MQTT server: `mosquitto`  
 - run a device with `npm start device`
 - run a fog with `npm start fog`
 - run a cloud with `npm start cloud`
