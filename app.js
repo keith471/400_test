@@ -9,7 +9,7 @@ var app = process.argv[3] == undefined ? 'testApp' : process.argv[3],
     port = process.argv[5] == undefined ? 1337 : process.argv[5];
 
 // don't forget to initialize the logger!
-errLog.init(app, true);
+errLog.init(app, false);
 
 console.log('Node id: ' + id);
 
@@ -40,4 +40,4 @@ reggie.on('cloud-down', function(cloudId) {
     console.log('Cloud node down: ' + cloudId);
 });
 
-reggie.register(globals.protocols.LOCALSTORAGE);
+reggie.register();

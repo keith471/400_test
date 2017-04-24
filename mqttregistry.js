@@ -142,7 +142,7 @@ MQTTRegistry.prototype._registerDevice = function() {
 
     /* connect event emitted on successful connection or reconnection */
     this.client.on('connect', function (connack) {
-        console.log('Device ' + self.id + ' connected');
+        //console.log('Device ' + self.id + ' connected');
 
         // if first connection, then set up subscriptions
         if (!connack.sessionPresent) {
@@ -163,7 +163,7 @@ MQTTRegistry.prototype._registerDevice = function() {
                     self.emit('mqtt-reg-error');
                     return;
                 }
-                console.log('Device ' + self.id + ' subscribed to ' + JSON.stringify(granted));
+                //console.log('Device ' + self.id + ' subscribed to ' + JSON.stringify(granted));
                 logger.log.info('Device ' + self.id + ' subscribed to ' + JSON.stringify(granted));
             });
         }
@@ -175,7 +175,7 @@ MQTTRegistry.prototype._registerDevice = function() {
                 // again, an error here means we should not use MQTT
                 self.emit('mqtt-reg-error');
             }
-            console.log('Device ' + self.id + ' published its status');
+            //console.log('Device ' + self.id + ' published its status');
         });
     });
 
@@ -189,15 +189,15 @@ MQTTRegistry.prototype._registerDevice = function() {
     });
 
     this.client.on('reconnect', function () {
-        console.log('client reconnected')
+        //console.log('client reconnected')
     });
 
     this.client.on('close', function () {
-        console.log('client disconnected')
+        //console.log('client disconnected')
     });
 
     this.client.on('offline', function () {
-        console.log('client offline');
+        //console.log('client offline');
     });
 
     this.client.on('error', function (error) {
@@ -246,7 +246,7 @@ MQTTRegistry.prototype._registerFog = function() {
     var self = this;
 
     this.client.on('connect', function (connack) {
-        console.log('Fog ' + self.id + ' connected');
+        //console.log('Fog ' + self.id + ' connected');
 
         if (!connack.sessionPresent) {
             /*
@@ -265,7 +265,7 @@ MQTTRegistry.prototype._registerFog = function() {
                     self.emit('mqtt-reg-error');
                     return;
                 }
-                console.log('Fog ' + self.id + ' subscribed to ' + JSON.stringify(granted));
+                //console.log('Fog ' + self.id + ' subscribed to ' + JSON.stringify(granted));
                 logger.log.info('Fog ' + self.id + ' subscribed to ' + JSON.stringify(granted));
             });
         }
@@ -276,7 +276,7 @@ MQTTRegistry.prototype._registerFog = function() {
                 logger.log.error(err);
                 self.emit('mqtt-reg-error');
             }
-            console.log('Fog ' + self.id + ' published its status');
+            //console.log('Fog ' + self.id + ' published its status');
         });
     });
 
@@ -290,15 +290,15 @@ MQTTRegistry.prototype._registerFog = function() {
     });
 
     this.client.on('reconnect', function () {
-        console.log('client reconnected')
+        //console.log('client reconnected')
     });
 
     this.client.on('close', function () {
-        console.log('client disconnected')
+        //console.log('client disconnected')
     });
 
     this.client.on('offline', function () {
-        console.log('client offline');
+        //console.log('client offline');
     });
 
     this.client.on('error', function (error) {
@@ -326,7 +326,7 @@ MQTTRegistry.prototype._registerCloud = function() {
     var self = this;
 
     this.client.on('connect', function (connack) {
-        console.log('Device ' + self.id + ' connected');
+        //console.log('Device ' + self.id + ' connected');
 
         if (!connack.sessionPresent) {
             // set up subscriptions
@@ -340,7 +340,7 @@ MQTTRegistry.prototype._registerCloud = function() {
                     self.emit('mqtt-reg-error');
                     return;
                 }
-                console.log('Cloud ' + self.id + ' subscribed to ' + JSON.stringify(granted));
+                //console.log('Cloud ' + self.id + ' subscribed to ' + JSON.stringify(granted));
                 logger.log.info('Cloud ' + self.id + ' subscribed to ' + JSON.stringify(granted));
             });
         }
@@ -351,7 +351,7 @@ MQTTRegistry.prototype._registerCloud = function() {
                 logger.log.error(err);
                 self.emit('mqtt-reg-error');
             }
-            console.log('Cloud ' + self.id + ' published its status');
+            //console.log('Cloud ' + self.id + ' published its status');
         });
     });
 
@@ -364,15 +364,15 @@ MQTTRegistry.prototype._registerCloud = function() {
     });
 
     this.client.on('reconnect', function () {
-        console.log('client reconnected')
+        //console.log('client reconnected')
     });
 
     this.client.on('close', function () {
-        console.log('client disconnected')
+        //console.log('client disconnected')
     });
 
     this.client.on('offline', function () {
-        console.log('client offline');
+        //console.log('client offline');
     });
 
     this.client.on('error', function (error) {
