@@ -25,8 +25,18 @@ Registrar.prototype = new EventEmitter();
  * If this fails, then it will fall back on mDNS.
  * If mDNS also fails, then it will fall back on local storage.
  */
-Registrar.prototype.register = function() {
-    this._registerWithMQTT();
+Registrar.prototype.register = function(startWith) {
+    switch(startWith) {
+        case globals.protocols.MDNS:
+            this._registerWithMDNS();
+            break;
+        case globals.protocols.LOCALSTORAGE:
+            this._registerWithLocalStorage();
+            break;
+        default:
+            this._registerWithMQTT();
+            break;
+    }
 }
 
 /**
@@ -130,10 +140,9 @@ Registrar.prototype._registerWithLocalStorage = function() {
         for (var i in updates.newlyOfflineFogs) {
             self.emit('fog-down', updates.newlyOfflineFogs[i]);
         }
-        // query all newly online fogs for their updated information
-        // and then announce it
-        if (updates.newlyOnlineFogs) {
-            self._ls_resolveNodes(updates.newlyOnlineFogs, 'fog-up');
+        // announce the fogs that have come online
+        for (var i in updates.newlyOnlineFogs) {
+            self.emit('fog-up', updates.newlyOnlineFogs[i]);
         }
     });
 
@@ -143,28 +152,13 @@ Registrar.prototype._registerWithLocalStorage = function() {
         for (var i in updates.newlyOfflineClouds) {
             self.emit('cloud-down', updates.newlyOfflineClouds[i]);
         }
-        // query all newly online clouds for their updated information
-        // and then announce it
-        if (updates.newlyOnlineClouds) {
-            self._ls_resolveNodes(updates.newlyOnlineClouds, 'cloud-up');
+        // announce the fogs that have come online
+        for (var i in updates.newlyOnlineClouds) {
+            self.emit('cloud-up', updates.newlyOnlineClouds[i]);
         }
     });
 
     this.localRegistry.register();
-}
-
-/**
- * Local storage helper function for resolving IP/port of newly online nodes
- */
-Registrar.prototype._ls_resolveNodes = function(nodes, emitMessage) {
-    var self = this;
-    for (var i in nodes) {
-        this.localRegistry.query(this.id, nodes[i], function(err, response) {
-            if (!err) {
-                self.emit(emitMessage, response);
-            }
-        });
-    }
 }
 
 /* exports */

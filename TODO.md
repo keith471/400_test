@@ -1,6 +1,19 @@
 # TODO
 
-- come up with a way to test!
+- probably still not thread safe
+    - need to treat as readers/writers problem: can allow as many readers as you'd like at once, but only one writer
+- try adding three shared keys:
+    - devices, fogs, and clouds
+    - these are all lists of ids of the nodes online
+    - when a new node comes up, it grabs a lock and writes to this key.
+    - otherwise nodes just read from the key in order to be able to know the ids of the nodes to scan
+
+## MQTT
+- have nodes responding to queries respond only to the node that made the query, rather than broadcasting an announcement to anyone listening?
+
+## Local storage
+- will break if a program ungracefully exits before unlocking the locks it holds
+    - try to fix with stale
 
 ## Notes on mDNS
 - can advertise more than one thing at once, and browse for as many things as you'd like

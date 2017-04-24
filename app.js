@@ -1,11 +1,17 @@
 var Registrar = require('./jregistrar'),
+    errLog = require('./jerrlog'),
     globals = require('./constants').globals,
-    uuid = require(uuid4);
+    uuid = require('uuid4');
 
-var app = process.argv[2] == undefined ? 'testApp' : process.argv[2],
-    machType = process.argv[3] == undefined ? globals.NodeType.DEVICE : process.argv[3],
+var app = process.argv[3] == undefined ? 'testApp' : process.argv[3],
+    machType = process.argv[2] == undefined ? globals.NodeType.DEVICE : process.argv[2],
     id = process.argv[4] == undefined ? uuid() : process.argv[4],
     port = process.argv[5] == undefined ? 1337 : process.argv[5];
+
+// don't forget to initialize the logger!
+errLog.init(app, true);
+
+console.log('Node id: ' + id);
 
 var reggie = new Registrar(app, machType, id, port);
 
@@ -34,4 +40,4 @@ reggie.on('cloud-down', function(cloudId) {
     console.log('Cloud node down: ' + cloudId);
 });
 
-reggie.register();
+reggie.register(globals.protocols.LOCALSTORAGE);

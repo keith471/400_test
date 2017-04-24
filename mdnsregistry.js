@@ -102,6 +102,9 @@ MDNSRegistry.prototype._browse = function() {
             self.emit('mdns-fog-down', service.name);
         });
 
+        /* start the browser */
+        browser.start();
+
     } else if (this.machType === constants.globals.NodeType.FOG) {
         // fogs browse for clouds
         browser = mdns.createBrowser(mdns.tcp(this.app + '-' + constants.globals.NodeType.CLOUD));
@@ -123,10 +126,10 @@ MDNSRegistry.prototype._browse = function() {
             self.emit('mdns-cloud-down', service.name);
         });
 
+        /* start the browser */
+        browser.start();
     }
     // NOTE: clouds don't browse for anyone
-    /* start the browser */
-    browser.start();
 }
 
 MDNSRegistry.prototype._getServiceData = function(service) {

@@ -115,7 +115,7 @@ MQTTRegistry.prototype.quit = function(cb) {
 MQTTRegistry.prototype._registerDevice = function() {
 
     /* initialize subs with default subscriptions */
-    this.fogStatusTopic = this.app + '/annouce/fog/+/status';
+    this.fogStatusTopic = this.app + '/announce/fog/+/status';
     this.fogResolutionTopic = this.app + '/announce/fog/+/ipandport';
     // subscription to fog node status updates
     this.subs.push({
@@ -142,6 +142,7 @@ MQTTRegistry.prototype._registerDevice = function() {
 
     /* connect event emitted on successful connection or reconnection */
     this.client.on('connect', function (connack) {
+        console.log('Device ' + self.id + ' connected');
 
         // if first connection, then set up subscriptions
         if (!connack.sessionPresent) {
@@ -162,17 +163,19 @@ MQTTRegistry.prototype._registerDevice = function() {
                     self.emit('mqtt-reg-error');
                     return;
                 }
+                console.log('Device ' + self.id + ' subscribed to ' + JSON.stringify(granted));
                 logger.log.info('Device ' + self.id + ' subscribed to ' + JSON.stringify(granted));
             });
         }
 
         // publish our presence on the network
-        self.client.publish(self.app + '/anounce/device/' + self.id + '/status', 'online', {qos: 0, retain: true}, function (err) {
+        self.client.publish(self.app + '/announce/device/' + self.id + '/status', 'online', {qos: 0, retain: true}, function (err) {
             if (err) {
                 logger.log.error(err);
                 // again, an error here means we should not use MQTT
                 self.emit('mqtt-reg-error');
             }
+            console.log('Device ' + self.id + ' published its status');
         });
     });
 
@@ -185,19 +188,17 @@ MQTTRegistry.prototype._registerDevice = function() {
         }
     });
 
-    /*
-    self.client.on('reconnect', function () {
+    this.client.on('reconnect', function () {
         console.log('client reconnected')
     });
 
-    self.client.on('close', function () {
+    this.client.on('close', function () {
         console.log('client disconnected')
     });
 
     this.client.on('offline', function () {
-        self.emit('mqtt-node-down');
+        console.log('client offline');
     });
-    */
 
     this.client.on('error', function (error) {
         logger.log.error(error);
@@ -211,7 +212,7 @@ MQTTRegistry.prototype._registerDevice = function() {
 MQTTRegistry.prototype._registerFog = function() {
 
     /* initialize subs with default subscriptions */
-    this.cloudStatusTopic = this.app + '/annouce/cloud/+/status';
+    this.cloudStatusTopic = this.app + '/announce/cloud/+/status';
     this.cloudResolutionTopic = this.app + '/announce/cloud/+/ipandport';
     this.queryTopic = this.app + '/query/fog/' + this.id + '/ipandport';
     // subscription to cloud node status updates
@@ -221,7 +222,7 @@ MQTTRegistry.prototype._registerFog = function() {
         regex: regGen.getRegex(this.cloudStatusTopic),
         qos: 0,
         emitTag: null,
-        exec: this._processCloudUpdate
+        exec: this._processCloudStatusUpdate
     });
     // subscription to cloud node ip/port updates
     this.subs.push({
@@ -245,6 +246,7 @@ MQTTRegistry.prototype._registerFog = function() {
     var self = this;
 
     this.client.on('connect', function (connack) {
+        console.log('Fog ' + self.id + ' connected');
 
         if (!connack.sessionPresent) {
             /*
@@ -263,16 +265,18 @@ MQTTRegistry.prototype._registerFog = function() {
                     self.emit('mqtt-reg-error');
                     return;
                 }
+                console.log('Fog ' + self.id + ' subscribed to ' + JSON.stringify(granted));
                 logger.log.info('Fog ' + self.id + ' subscribed to ' + JSON.stringify(granted));
             });
         }
 
         // publish our presence on the network
-        self.client.publish(self.app + '/anounce/fog/' + self.id + '/status', 'online', {qos: 1, retain: true}, function (err) {
+        self.client.publish(self.app + '/announce/fog/' + self.id + '/status', 'online', {qos: 1, retain: true}, function (err) {
             if (err) {
                 logger.log.error(err);
                 self.emit('mqtt-reg-error');
             }
+            console.log('Fog ' + self.id + ' published its status');
         });
     });
 
@@ -283,6 +287,18 @@ MQTTRegistry.prototype._registerFog = function() {
             // no matching topic in list of subscriptions...
             logger.log.warning('Message received on fog ' + self.id + ' for unknown topic ' + topic);
         }
+    });
+
+    this.client.on('reconnect', function () {
+        console.log('client reconnected')
+    });
+
+    this.client.on('close', function () {
+        console.log('client disconnected')
+    });
+
+    this.client.on('offline', function () {
+        console.log('client offline');
     });
 
     this.client.on('error', function (error) {
@@ -302,7 +318,7 @@ MQTTRegistry.prototype._registerCloud = function() {
         isUserDefined: false,
         topic: this.queryTopic,
         regex: regGen.getRegex(this.queryTopic),
-        qos: 0,
+        qos: 1,
         emitTag: null,
         exec: this._replyToQuery
     });
@@ -310,12 +326,13 @@ MQTTRegistry.prototype._registerCloud = function() {
     var self = this;
 
     this.client.on('connect', function (connack) {
+        console.log('Device ' + self.id + ' connected');
 
         if (!connack.sessionPresent) {
             // set up subscriptions
             var subs = {};
             // subscribe to queries to this cloud's status
-            subs[this.queryTopic] = 1;
+            subs[self.queryTopic] = 1;
 
             self.client.subscribe(subs, function (err, granted) {
                 if (err) {
@@ -323,16 +340,18 @@ MQTTRegistry.prototype._registerCloud = function() {
                     self.emit('mqtt-reg-error');
                     return;
                 }
+                console.log('Cloud ' + self.id + ' subscribed to ' + JSON.stringify(granted));
                 logger.log.info('Cloud ' + self.id + ' subscribed to ' + JSON.stringify(granted));
             });
         }
 
         // publish our presence on the network
-        self.client.publish(self.app + '/anounce/cloud/' + self.id + '/status', 'online', {qos: 1, retain: true}, function (err) {
+        self.client.publish(self.app + '/announce/cloud/' + self.id + '/status', 'online', {qos: 1, retain: true}, function (err) {
             if (err) {
                 logger.log.error(err);
                 self.emit('mqtt-reg-error');
             }
+            console.log('Cloud ' + self.id + ' published its status');
         });
     });
 
@@ -344,6 +363,18 @@ MQTTRegistry.prototype._registerCloud = function() {
         }
     });
 
+    this.client.on('reconnect', function () {
+        console.log('client reconnected')
+    });
+
+    this.client.on('close', function () {
+        console.log('client disconnected')
+    });
+
+    this.client.on('offline', function () {
+        console.log('client offline');
+    });
+
     this.client.on('error', function (error) {
         logger.log.error(error);
         self.emit('mqtt-reg-error');
@@ -352,10 +383,10 @@ MQTTRegistry.prototype._registerCloud = function() {
 
 /**
  * Process an update on the status of a fog node
- * topic [string]: app + '/annouce/fog/+/status'
+ * topic [string]: app + '/announce/fog/+/status'
  * message [string]: whether the fog is offline or online
  */
-MQTTRegistry.prototype._processFogStatusUpdate = function(topic, message) {
+MQTTRegistry.prototype._processFogStatusUpdate = function(self, topic, message) {
 
     // parse the fogId out of the topic
     var components = topic.split('/');
@@ -363,9 +394,9 @@ MQTTRegistry.prototype._processFogStatusUpdate = function(topic, message) {
 
     // emit event depending on whether the fog went online or offline
     if (message === 'online') {
-        this.emit('mqtt-fog-up', fogId);
+        self.emit('mqtt-fog-up', fogId);
     } else {
-        this.emit('mqtt-fog-down', fogId);
+        self.emit('mqtt-fog-down', fogId);
     }
 }
 
@@ -374,14 +405,14 @@ MQTTRegistry.prototype._processFogStatusUpdate = function(topic, message) {
  * topic [string]: app + '/announce/fog/+/ipandport'
  * message [string]: '{ip: ip, port: port}'
  */
-MQTTRegistry.prototype._processFogIpAndPort = function(topic, message) {
+MQTTRegistry.prototype._processFogIpAndPort = function(self, topic, message) {
     // parse the fogId out of the topic
     var components = topic.split('/');
     var fogId = components[3];
 
     var response = JSON.parse(message);
     response.id = fogId;
-    this.emit('mqtt-fog-ipandport', response);
+    self.emit('mqtt-fog-ipandport', response);
 }
 
 /**
@@ -389,7 +420,7 @@ MQTTRegistry.prototype._processFogIpAndPort = function(topic, message) {
  * topic [string]: this.cloudStatusTopic
  * message [string]: this.statusQueryTopic
  */
-MQTTRegistry.prototype._processCloudStatusUpdate = function(topic, message) {
+MQTTRegistry.prototype._processCloudStatusUpdate = function(self, topic, message) {
 
     // parse the cloudId out of the topic
     var components = topic.split('/');
@@ -397,9 +428,9 @@ MQTTRegistry.prototype._processCloudStatusUpdate = function(topic, message) {
 
     // emit event depending on whether the fog went online or offline
     if (message === 'online') {
-        this.emit('mqtt-cloud-up', cloudId);
+        self.emit('mqtt-cloud-up', cloudId);
     } else {
-        this.emit('mqtt-cloud-down', cloudId);
+        self.emit('mqtt-cloud-down', cloudId);
     }
 }
 
@@ -408,28 +439,28 @@ MQTTRegistry.prototype._processCloudStatusUpdate = function(topic, message) {
  * topic [string]: app + '/announce/cloud/+/ipandport'
  * message [string]: '{ip: ip, port: port}'
  */
-MQTTRegistry.prototype._processCloudIpAndPort = function(topic, message) {
+MQTTRegistry.prototype._processCloudIpAndPort = function(self, topic, message) {
     // parse the cloudId out of the topic
     var components = topic.split('/');
     var cloudId = components[3];
 
     var response = JSON.parse(message);
     response.id = cloudId;
-    this.emit('mqtt-cloud-ipandport', response);
+    self.emit('mqtt-cloud-ipandport', response);
 }
 
 /**
  * Respond to a query for our ip/port by announcing it
  */
-MQTTRegistry.prototype._replyToQuery = function() {
-    var message = JSON.stringify({ ip: this._getIPv4Address(), port: this.port });
+MQTTRegistry.prototype._replyToQuery = function(self) {
+    var message = JSON.stringify({ ip: self._getIPv4Address(), port: self.port });
     var topic;
-    if (this.machType === constants.globals.NodeType.FOG) {
-        topic = this.app + '/anounce/fog/' + this.id + '/ipandport';
+    if (self.machType === constants.globals.NodeType.FOG) {
+        topic = self.app + '/announce/fog/' + self.id + '/ipandport';
     } else {
-        topic = this.app + '/anounce/cloud/' + this.id + '/ipandport';
+        topic = self.app + '/announce/cloud/' + self.id + '/ipandport';
     }
-    this.client.publish(topic, message, {qos: 1, retain: false}, function (err) {
+    self.client.publish(topic, message, {qos: 1, retain: false}, function (err) {
         if (err) {
             logger.log.error(err);
         }
@@ -451,7 +482,7 @@ MQTTRegistry.prototype._handleMessage = function(topic, message) {
                 this.emit(this.subs[i].emitTag, topic, message.toString());
             } else {
                 // call the associated built-in function
-                this.subs[i].exec(topic, message.toString());
+                this.subs[i].exec(this, topic, message.toString());
             }
             return true;
         }

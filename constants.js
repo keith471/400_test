@@ -8,7 +8,12 @@ module.exports = {
             FOG: 'fog',
             CLOUD: 'cloud'
         }),
-        localhost: '127.0.0.1'
+        localhost: '127.0.0.1',
+        protocols: Object.freeze({
+            MQTT: 'mqtt',
+            MDNS: 'mdns',
+            LOCALSTORAGE: 'localStorage'
+        })
     },
 
     mqtt: {
@@ -27,6 +32,14 @@ module.exports = {
         checkInInterval: 3000, // 3 seconds
         queryResponseInterval: 500, // 500 ms
         queryRetries: 10,
-        queryRetryTimeout: 100 // 100 ms
+        queryRetryTimeout: 100, // 100 ms
+        devicesLock: 'devices.lock',
+        fogsLock: 'fogs.lock',
+        cloudsLock: 'clouds.lock',
+        lsInitLock: 'lsInit.lock',
+        initRetryInterval: 1000, // 1 second
+        addIdRetryInterval: 1000, // 1 second
+        checkinRetryInterval: 200, // 200 ms
+        stale: 1000 // 1 second
     }
 }

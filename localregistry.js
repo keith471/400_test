@@ -3,6 +3,7 @@
 //==============================================================================
 
 var LocalStorage = require('node-localstorage').LocalStorage,
+    lockFile = require('lockFile'),
     constants = require('./constants'),
     logger = require('./jerrlog'),
     Registry = require('./registry'),
@@ -18,7 +19,6 @@ function LocalRegistry(app, machType, id, port) {
     this.ip = this._getIPv4Address();
     // put the 'app' as a hidden directory in user's home
     this.appDir = os.homedir() + '/.' + app;
-    this.localStorage = new LocalStorage(this.appDir);
     this.lastScanAt = 0;
     this.currentOfflineMachs = {};
 }
@@ -26,142 +26,174 @@ function LocalRegistry(app, machType, id, port) {
 /* LocalRegistry inherits from Registry */
 LocalRegistry.prototype = new Registry();
 
+LocalRegistry.prototype._initLocalStorage = function(self) {
+    lockFile.lock(constants.localStorage.lsInitLock, { stale: constants.localStorage.stale}, function (err) {
+        if (err) {
+            // failed to acquire lock; try again later
+            //console.log('failed to acquire init lock, trying again later');
+            setTimeout(self._initLocalStorage, constants.localStorage.initRetryInterval, self);
+            return;
+        }
+        //console.log('successfully grabbed init lock');
+        lockFile.lock(constants.localStorage.devicesLock, { stale: constants.localStorage.stale}, function (err) {
+            if (err) {
+                // failed to acquire lock. This implies that someone else has already initilaized local storage
+                self.localStorage = new LocalStorage(self.appDir);
+                lockFile.unlockSync(constants.localStorage.lsInitLock);
+                return;
+            }
+            //console.log('successfully grabbed devices lock');
+            lockFile.lock(constants.localStorage.fogsLock, { stale: constants.localStorage.stale}, function (err) {
+                if (err) {
+                    self.localStorage = new LocalStorage(self.appDir);
+                    lockFile.unlockSync(constants.localStorage.devicesLock);
+                    lockFile.unlockSync(constants.localStorage.lsInitLock);
+                    return;
+                }
+                //console.log('successfully grabbed fogs lock');
+                lockFile.lock(constants.localStorage.cloudsLock, { stale: constants.localStorage.stale}, function (err) {
+                    if (err) {
+                        self.localStorage = new LocalStorage(self.appDir);
+                        lockFile.unlockSync(constants.localStorage.fogsLock);
+                        lockFile.unlockSync(constants.localStorage.devicesLock);
+                        lockFile.unlockSync(constants.localStorage.lsInitLock);
+                        return;
+                    }
+                    //console.log('successfully grabbed clouds lock');
+                    self.localStorage = new LocalStorage(self.appDir);
+                    if (!self.localStorage.getItem('devices')) {
+                        self.localStorage.setItem('devices', '{}');
+                        self.localStorage.setItem('fogs', '{}');
+                        self.localStorage.setItem('clouds', '{}');
+                    }
+                    lockFile.unlockSync(constants.localStorage.cloudsLock);
+                    lockFile.unlockSync(constants.localStorage.fogsLock);
+                    lockFile.unlockSync(constants.localStorage.devicesLock);
+                    lockFile.unlockSync(constants.localStorage.lsInitLock);
+                    self._register(self);
+                });
+            });
+        });
+    });
+}
+
 /**
  * Local storage registration consists of writing yourself into local storage
  */
 LocalRegistry.prototype.register = function() {
-    // create an entry in local storage for other nodes to write queries into
-    this.localStorage.setItem(this.id, '[]');
+    // first step in registration is initializing the local storage
+    // when this is done, it will begin the actual registration
+    this._initLocalStorage(this);
+}
 
+LocalRegistry.prototype._register = function(self) {
     // create an object to represent the machine
     var now = Date.now();
     var data = {
+        ip: self._getIPv4Address(),
+        port: self.port,
         lastCheckIn: now,
         createdAt: now,
         updatedAt: now
     };
 
-    // add it to local storage
-    if (this.machType === constants.globals.NodeType.DEVICE) {
-        this._addDevice(data);
-        // check in every so often to scan for fogs
-        this._deviceCheckIn(this);
-        setInterval(this._deviceCheckIn, constants.localStorage.checkInInterval, this);
-        // devices don't accept queries from anyone and so they don't scan for them
-    } else if (this.machType === constants.globals.NodeType.FOG) {
-        this._addFog(data);
-        // check in every so often to indicate that we're still here and to scan for fogs
-        this._fogCheckIn(this);
-        setInterval(this._fogCheckIn, constants.localStorage.checkInInterval, this);
-        // also, scan for queries!
-        this._respondToQueries();
-        setInterval(this._respondToQueries, constants.localStorage.queryResponseInterval);
+    if (self.machType === constants.globals.NodeType.DEVICE) {
+        self._addDevice(data, self);
+    } else if (self.machType === constants.globals.NodeType.FOG) {
+        self._addFog(data, self);
     } else {
-        this._addCloud(data);
-        // check in every so often to indicate that we're still here
-        this._cloudCheckIn(this);
-        setInterval(this._cloudCheckIn, constants.localStorage.checkInInterval, this);
-        // also, scan for queries!
-        this._respondToQueries();
-        setInterval(this._respondToQueries, constants.localStorage.queryResponseInterval);
+        self._addCloud(data, self);
     }
 }
 
 /**
- * Writes a query to local storage
- * TODO I don't think this is thread-safe
+ * Adds a device's id to the 'devices' list in local storage
  */
-LocalRegistry.prototype.query = function(senderId, receiverId, cb) {
-    // write the query to local storage
-    var receiverQueries = JSON.parse(this.localStorage.getItem(receiverId));
-    receiverQueries[senderId] = null;
-    this.localStorage.setItem(receiverId, JSON.stringify(receiverQueries));
-
-    // get the response
-    this._getResponse(senderId, receiverId, cb, constants.localStorage.queryRetries);
+LocalRegistry.prototype._addDevice = function(data, self) {
+    lockFile.lock(constants.localStorage.devicesLock, { stale: constants.localStorage.stale }, function (err) {
+        if (err) {
+            // failed to acquire lock; try again later
+            //console.log('failed to acquire device lock, trying again later');
+            setTimeout(self._addDevice, constants.localStorage.addIdRetryInterval, data, self);
+            return;
+        }
+        //console.log('successfully locked device lock');
+        // we've acquired the lock, so we are free to write to devices
+        var devs = JSON.parse(self.localStorage.getItem('devices'));
+        devs[self.id] = data;
+        self.localStorage.setItem('devices', JSON.stringify(devs));
+        // unlock!
+        lockFile.unlock(constants.localStorage.devicesLock, function (err) {
+            if (err) {
+                //console.log('error while unlocking device lock');
+                // TODO an error while unlocking the lockfile could mean that no one else can grab the lock...
+                logger.log.error(err);
+                return;
+            }
+            //console.log('successfully unlocked device lock');
+            // check in every so often to scan for fogs
+            setInterval(self._deviceCheckIn, constants.localStorage.checkInInterval, self);
+        });
+    });
 }
 
 /**
- * Try to get the response to a query up to retries times
+ * Adds a fog's id to the 'fogs' list in local storage
  */
-LocalRegistry.prototype._getResponse = function(senderId, receiverId, cb, retries) {
-    var receiverQueries = JSON.parse(this.localStorage.getItem(receiverId));
-    var response = receiverQueries[senderId];
-    if (response !== null) {
-        delete receiverQueries[senderId];
-        this.localStorage.setItem(receiverId, JSON.stringify(receiverQueries));
-        response.id = receiverId;
-        cb(null, response);
-        return;
-    }
-
-    // decrement retries
-    retries--;
-
-    if (retries === 0) {
-        cb(new Error("timeout while waiting for query response"));
-        return;
-    }
-
-    // try again after a bit of time
-    setTimeout(this._getResponse, 100, senderId, receiverId, cb, retries);
+LocalRegistry.prototype._addFog = function(data, self) {
+    lockFile.lock(constants.localStorage.fogsLock, { stale: constants.localStorage.stale}, function (err) {
+        if (err) {
+            //console.log(err);
+            //console.log('failed to acquire fog lock, trying again later');
+            setTimeout(self._addFog, constants.localStorage.addIdRetryInterval, data, self);
+            return;
+        }
+        //console.log('successfully locked fog lock');
+        var fogs = JSON.parse(self.localStorage.getItem('fogs'));
+        //console.log('successfully wrote fog to fogs')
+        fogs[self.id] = data;
+        //console.log(fogs);
+        self.localStorage.setItem('fogs', JSON.stringify(fogs));
+        lockFile.unlock(constants.localStorage.fogsLock, function (err) {
+            if (err) {
+                //console.log('error while unlocking fog lock');
+                // TODO an error while unlocking the lockfile could mean that no one else can grab the lock...
+                logger.log.error(err);
+                return;
+            }
+            //console.log('successfully unlocked fog lock');
+            // check in every so often to indicate that we're still here and to scan for clouds
+            setInterval(self._fogCheckIn, constants.localStorage.checkInInterval, self);
+        });
+    });
 }
 
 /**
- * Checks local storage for queries to us and responds if need be
- * TODO I don't think this is thread-safe
+ * Adds a cloud's id to the 'clouds' list in local storage
  */
-LocalRegistry.prototype._respondToQueries = function() {
-    var queries = JSON.parse(this.localStorage.getItem(this.id));
-    var connectionData = {
-        port: this.port,
-        ip: this.ip
-    };
-
-    for (var senderId in queries) {
-        if (!queries.hasOwnProperty(senderId)) continue;
-        queries[senderId] = connectionData;
-    }
-
-    this.localStorage.setItem(this.id, JSON.stringify(queries));
-}
-
-/**
- * Adds a device to local storage
- */
-LocalRegistry.prototype._addDevice = function(data) {
-    var devs = this._getMachs('devices');
-    devs[this.id] = data;
-    this.localStorage.setItem('devices', JSON.stringify(devs));
-}
-
-/**
- * Adds a fog to local storage
- */
-LocalRegistry.prototype._addFog = function(data) {
-    var fogs = this._getMachs('fogs');
-    fogs[this.id] = data;
-    this.localStorage.setItem('fogs', JSON.stringify(fogs));
-}
-
-/**
- * Adds a cloud to local storage
- */
-LocalRegistry.prototype._addCloud = function(data) {
-    var clouds = this._getMachs('clouds');
-    clouds[this.id] = data;
-    this.localStorage.setItem('clouds', JSON.stringify(clouds));
-}
-
-/**
- * A helper for getting all machines of a certain type from local storage
- */
-LocalRegistry.prototype._getMachs = function(key) {
-    var machStr = this.localStorage.getItem(key);
-    if (machStr !== null) {
-        return JSON.parse(machStr);
-    }
-    return {};
+LocalRegistry.prototype._addCloud = function(data, self) {
+    lockFile.lock(constants.localStorage.cloudsLock, { stale: constants.localStorage.stale}, function (err) {
+        if (err) {
+            //console.log('failed to acquire cloud lock, trying again later');
+            setTimeout(self._addCloud, constants.localStorage.addIdRetryInterval, data, self);
+            return;
+        }
+        //console.log('successfully locked cloud lock');
+        var clouds = JSON.parse(self.localStorage.getItem('clouds'));
+        clouds[self.id] = data;
+        self.localStorage.setItem('clouds', JSON.stringify(clouds));
+        lockFile.unlock(constants.localStorage.cloudsLock, function (err) {
+            if (err) {
+                //console.log('error while unlocking cloud lock');
+                // TODO an error while unlocking the lockfile could mean that no one else can grab the lock...
+                logger.log.error(err);
+                return;
+            }
+            //console.log('successfully unlocked cloud lock');
+            // check in every so often to indicate that we're still here
+            setInterval(self._cloudCheckIn, constants.localStorage.checkInInterval, self);
+        });
+    });
 }
 
 /**
@@ -177,9 +209,28 @@ LocalRegistry.prototype._deviceCheckIn = function(self) {
  */
 LocalRegistry.prototype._fogCheckIn = function(self) {
     // check-in
-    var fogs = JSON.parse(self.localStorage.getItem('fogs'));
-    fogs[self.id].lastCheckIn = Date.now();
-    self.localStorage.setItem('fogs', JSON.stringify(fogs));
+    lockFile.lock(constants.localStorage.fogsLock, { stale: constants.localStorage.stale}, function (err) {
+        if (err) {
+            //console.log(err);
+            //console.log('failed to acquire fog lock, trying again later');
+            setTimeout(self._fogCheckIn, constants.localStorage.checkinRetryInterval, self);
+            return;
+        }
+        //console.log('successfully locked fog lock');
+        var fogs = JSON.parse(self.localStorage.getItem('fogs'));
+        //console.log(self.id);
+        fogs[self.id].lastCheckIn = Date.now();
+        self.localStorage.setItem('fogs', JSON.stringify(fogs));
+        lockFile.unlock(constants.localStorage.fogsLock, function (err) {
+            if (err) {
+                //console.log('error while unlocking fog lock');
+                // TODO an error while unlocking the lockfile could mean that no one else can grab the lock...
+                logger.log.error(err);
+                return;
+            }
+            //console.log('successfully unlocked fog lock');
+        });
+    });
     // scan for clouds
     self._scanForClouds(self);
 }
@@ -189,73 +240,178 @@ LocalRegistry.prototype._fogCheckIn = function(self) {
  */
 LocalRegistry.prototype._cloudCheckIn = function(self) {
     // just check-in
-    var clouds = JSON.parse(self.localStorage.getItem('clouds'));
-    clouds[self.id].lastCheckIn = Date.now();
-    self.localStorage.setItem('clouds', JSON.stringify(clouds));
+    lockFile.lock(constants.localStorage.cloudsLock, { stale: constants.localStorage.stale}, function (err) {
+        if (err) {
+            //console.log(err);
+            //console.log('failed to acquire cloud lock, trying again later');
+            setTimeout(self._cloudCheckIn, constants.localStorage.checkinRetryInterval, self);
+            return;
+        }
+        //console.log('successfully locked cloud lock');
+        var clouds = JSON.parse(self.localStorage.getItem('clouds'));
+        clouds[self.id].lastCheckIn = Date.now();
+        self.localStorage.setItem('clouds', JSON.stringify(clouds));
+        lockFile.unlock(constants.localStorage.cloudsLock, function (err) {
+            if (err) {
+                //console.log('error while unlocking cloud lock');
+                // TODO an error while unlocking the lockfile could mean that no one else can grab the lock...
+                logger.log.error(err);
+                return;
+            }
+            //console.log('successfully unlocked cloud lock');
+        });
+    });
 }
 
 /**
  * Scans local storage for new fogs every x seconds
  */
 LocalRegistry.prototype._scanForFogs = function(self) {
-    var fogs = JSON.parse(self.localStorage.getItem('fogs'));
-
-    var fogUpdate = self._getUpdate(fogs);
-
-    if (fogUpdate !== null) {
-        self.emit('ls-fog-update', { newlyOnlineFogs: fogUpdate.newlyOnlineMachs, newlyOfflineFogs: fogUpdate.newlyOfflineMachs });
-    }
+    lockFile.lock(constants.localStorage.fogsLock, { stale: constants.localStorage.stale}, function (err) {
+        if (err) {
+            //console.log(err);
+            //console.log('failed to acquire fog lock, trying again later');
+            return;
+        }
+        //console.log('successfully locked fog lock');
+        var fogs = JSON.parse(self.localStorage.getItem('fogs'));
+        var updates = self._getUpdate(fogs, self);
+        if (updates !== null) {
+            self.emit('ls-fog-update', { newlyOnlineFogs: updates.newlyOnlineMachs, newlyOfflineFogs: updates.newlyOfflineMachs });
+        }
+        lockFile.unlock(constants.localStorage.fogsLock, function (err) {
+            if (err) {
+                //console.log('error while unlocking fog lock');
+                // TODO an error while unlocking the lockfile could mean that no one else can grab the lock...
+                logger.log.error(err);
+                return;
+            }
+            //console.log('successfully unlocked fog lock');
+        });
+    });
 }
 
 /**
  * Scans local storage for new clouds every x seconds
  */
 LocalRegistry.prototype._scanForClouds = function(self) {
-    var clouds = JSON.parse(self.localStorage.getItem('clouds'));
-
-    var cloudUpdate = self._getUpdate(clouds);
-
-    if (cloudUpdate !== null) {
-        self.emit('ls-cloud-update', { newlyOnlineClouds: cloudUpdate.newlyOnlineMachs, newlyOfflineClouds: cloudUpdate.newlyOfflineMachs });
-    }
+    lockFile.lock(constants.localStorage.cloudsLock, { stale: constants.localStorage.stale}, function (err) {
+        if (err) {
+            //console.log(err);
+            //console.log('failed to acquire cloud lock, trying again later');
+            return;
+        }
+        //console.log('successfully locked cloud lock');
+        var clouds = JSON.parse(self.localStorage.getItem('clouds'));
+        var updates = self._getUpdate(clouds, self);
+        if (updates !== null) {
+            self.emit('ls-cloud-update', { newlyOnlineClouds: updates.newlyOnlineMachs, newlyOfflineClouds: updates.newlyOfflineMachs });
+        }
+        lockFile.unlock(constants.localStorage.cloudsLock, function (err) {
+            if (err) {
+                //console.log('error while unlocking cloud lock');
+                // TODO an error while unlocking the lockfile could mean that no one else can grab the lock...
+                logger.log.error(err);
+                return;
+            }
+            //console.log('successfully unlocked cloud lock');
+        });
+    });
 }
 
 /**
  * Helper function for finding new/updated nodes
  */
-LocalRegistry.prototype._getUpdate = function(machs) {
+/*
+LocalRegistry.prototype._getUpdate = function(machType, self) {
+    var node;
+    var nodeId;
     var newlyOnlineMachs = null;
     var newlyOfflineMachs = null;
     var now = Date.now();
-    for (var machId in machs) {
-        // first, check if the node has gone offline
-        if ((now - machs[machId].lastCheckIn) > 2 * constants.localStorage.checkInInterval) {
-            // if we haven't already noted that the machine is offline...
-            if (!this.currentOfflineMachs[machId]) {
-                if (newlyOfflineMachs === null) {
-                    newlyOfflineMachs = [];
+    var nodes = JSON.parse(self.localStorage.getItem());
+    for (var i = 0; i < self.localStorage.length; i++) {
+        nodeId = self.localStorage.key(i);
+        node = JSON.parse(self.localStorage.getItem(nodeId));
+        if (node.machType === machType) {
+            if (nodeId != self.id) {
+                // first, check if the node has gone offline
+                if ((now - node.lastCheckIn) > 2 * constants.localStorage.checkInInterval) {
+                    // if we haven't already noted that the machine is offline...
+                    if (!self.currentOfflineMachs[nodeId]) {
+                        if (newlyOfflineMachs === null) {
+                            newlyOfflineMachs = [];
+                        }
+                        newlyOfflineMachs.push(nodeId);
+                        self.currentOfflineMachs[nodeId] = true;
+                    }
+                } else if (node.updatedAt > self.lastScanAt) {
+                    if (newlyOnlineMachs === null) {
+                        newlyOnlineMachs = [];
+                    }
+                    newlyOnlineMachs.push({
+                        id: nodeId,
+                        ip: node.ip,
+                        port: node.port
+                    });
+                    // in case we currently have this node recorded as offline
+                    delete self.currentOfflineMachs[nodeId];
                 }
-                newlyOfflineMachs.push(machId);
-                this.currentOfflineMachs[machId] = true;
-            }
-        } else if (machs[machId].updatedAt > this.lastScanAt) {
-            if (machs[machId].createdAt === machs[machId].updatedAt) {
-                if (newlyOnlineMachs === null) {
-                    newlyOnlineMachs = [];
-                }
-                newlyOnlineMachs.push(machId);
-                // in case we currently have this node recorded as offline
-                delete this.currentOfflineMachs[machId];
             }
         }
     }
 
-    this.lastScanAt = Date.now();
+    self.lastScanAt = Date.now();
 
     if (newlyOnlineMachs !== null || newlyOfflineMachs !== null) {
         return { newlyOnlineMachs: newlyOnlineMachs, newlyOfflineMachs: newlyOfflineMachs };
     }
+
     return null;
+}
+*/
+
+/**
+ * Helper function for finding newly online and offline nodes
+ */
+ LocalRegistry.prototype._getUpdate = function(machs, self) {
+     var newlyOnlineMachs = null;
+     var newlyOfflineMachs = null;
+     var now = Date.now();
+     for (var machId in machs) {
+         // first, check if the node has gone offline
+         if ((now - machs[machId].lastCheckIn) > 2 * constants.localStorage.checkInInterval) {
+             // if we haven't already noted that the machine is offline...
+             if (!self.currentOfflineMachs[machId]) {
+                 if (newlyOfflineMachs === null) {
+                     newlyOfflineMachs = [];
+                 }
+                 newlyOfflineMachs.push(machId);
+                 self.currentOfflineMachs[machId] = true;
+             }
+         } else if (machs[machId].updatedAt > self.lastScanAt) {
+             if (newlyOnlineMachs === null) {
+                 newlyOnlineMachs = [];
+             }
+             newlyOnlineMachs.push(machId);
+             // in case we currently have this node recorded as offline
+             delete self.currentOfflineMachs[machId];
+         }
+     }
+
+     self.lastScanAt = Date.now();
+
+     if (newlyOnlineMachs !== null || newlyOfflineMachs !== null) {
+         return { newlyOnlineMachs: newlyOnlineMachs, newlyOfflineMachs: newlyOfflineMachs };
+     }
+     return null;
+ }
+
+/**
+ * Refreshes local storage
+ */
+LocalRegistry.prototype.refreshLocalStorage = function(self) {
+    self.localStorage = new LocalStorage(self.appDir);
 }
 
 module.exports = LocalRegistry;

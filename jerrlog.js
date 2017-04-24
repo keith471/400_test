@@ -14,15 +14,14 @@ module.exports = {
 
     log: null,
 
-    init: function(app) {
+    init: function(app, printToStderr) {
+        var streams = [{ path: './logs/log.log' }];
+        if (printToStderr) {
+            streams.push({ stream: process.stderr });
+        }
         module.exports.log = bunyan.createLogger({
             name: app,
-            streams: [{
-                path: './logs/log.log'
-            },
-            {
-                stream: process.stderr
-            }]
+            streams: streams
         });
     }
 }
