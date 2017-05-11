@@ -56,6 +56,7 @@ LocalRegistry.prototype._initLocalStorage = function(self, cb) {
                 self.localStorage.setItem('fogs_' + i, '{}');
                 self.localStorage.setItem('clouds_' + i, '{}');
             }
+            self.localStorage.setItem('initialized', 'true');
         }
         lockFile.unlockSync(constants.localStorage.initLock);
         self.emit('ls-initialized');
@@ -266,7 +267,6 @@ LocalRegistry.prototype._fogCheckIn = function(self) {
         }
         //console.log('successfully locked fog lock');
         var fogs = JSON.parse(self.localStorage.getItem(binName));
-        //console.log(self.id);
         fogs[self.id].lastCheckIn = Date.now();
         self.localStorage.setItem(binName, JSON.stringify(fogs));
         lockFile.unlockSync(binName);

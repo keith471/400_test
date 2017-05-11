@@ -1,6 +1,5 @@
 # TODO
 
-- debug issue with two fogs and local storage
 - separate registration/discovery in MQTT and fix function names
 - nodes should occasionally try using the next protocol up to see if it works all of a sudden, meaning they can then switch over to it
 
