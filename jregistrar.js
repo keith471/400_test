@@ -1,4 +1,3 @@
-
 var EventEmitter = require('events'),
     globals = require('./constants').globals;
     MQTTRegistry = require('./mqttregistry'),
@@ -20,21 +19,32 @@ Registrar.prototype = new EventEmitter();
 //==============================================================================
 
 /**
- * Register a node on the network.
+ * Register a node on the network, and discover other nodes.
  * A node will always attempt to register using MQTT first.
  * If this fails, then it will fall back on mDNS.
  * If mDNS also fails, then it will fall back on local storage.
  */
-Registrar.prototype.register = function(startWith) {
+Registrar.prototype.registerAndDiscover = function(startWith) {
+    this.mqttRegistry = new MQTTRegistry(this.app, this.machType, this.id, this.port);
+    this.mdnsRegistry = new MDNSRegistry(this.app, this.machType, this.id, this.port);
+    this.localRegistry = new LocalRegistry(this.app, this.machType, this.id, this.port);
     switch(startWith) {
         case globals.protocols.MDNS:
-            this._registerWithMDNS();
+            // register with local storage
+            this.localRegistry._registerWithLocalStorage();
+            // register and discover with mdns
+            this._registerAndDiscoverWithMDNS();
             break;
         case globals.protocols.LOCALSTORAGE:
-            this._registerWithLocalStorage();
+            // register and discover using local storage
+            this._registerAndDiscoverWithLocalStorage();
             break;
         default:
-            this._registerWithMQTT();
+            // register with mDNS and local storage
+            this.mdnsRegistry._registerWithMDNS();
+            this.localRegistry._registerWithLocalStorage();
+            // register and discover using mqtt
+            this._registerAndDiscoverWithMQTT();
             break;
     }
 }
@@ -43,9 +53,7 @@ Registrar.prototype.register = function(startWith) {
  * Attempts to handle registration with MQTT.
  * If this fails, we fall back on mDNS.
  */
-Registrar.prototype._registerWithMQTT = function() {
-    this.mqttRegistry = new MQTTRegistry(this.app, this.machType, this.id, this.port);
-
+Registrar.prototype._registerAndDiscoverWithMQTT = function() {
     var self = this;
 
     this.mqttRegistry.on('mqtt-fog-up', function(fogId) {
@@ -79,27 +87,25 @@ Registrar.prototype._registerWithMQTT = function() {
         // TODO: could add some number of retries
         // close the connection
         self.mqttRegistry.quit(function() {
-            // fall back to mDNS
-            self._registerWithMDNS();
+            // fall back on mDNS
+            self._registerAndDiscoverWithMDNS();
         });
     });
 
-    // initiate mqtt registration
-    this.mqttRegistry.register();
+    // initiate mqtt registration/discovery
+    this.mqttRegistry.registerAndDiscover();
 }
 
 /**
- * Attempts to register with mDNS
+ * Attempts to register/discover with mDNS
  * If this fails, we fall back on local storage
  */
-Registrar.prototype._registerWithMDNS = function() {
-    this.mdnsRegistry = new MDNSRegistry(this.app, this.machType, this.id, this.port);
-
+Registrar.prototype._registerAndDiscoverWithMDNS = function() {
     var self = this;
 
     /* if mdns error, fall back on local storage */
     this.mdnsRegistry.on('mdns-ad-error', function(err) {
-        self._registerWithLocalStorage();
+        self._registerAndDiscoverWithLocalStorage();
     });
 
     /* triggered when a fog goes up */
@@ -122,16 +128,25 @@ Registrar.prototype._registerWithMDNS = function() {
         self.emit('cloud-down', cloudId);
     });
 
-    // initiate mDNS registration
+    // initiate mDNS registration/discovery
+    if (!this.mdnsRegistry.isRegistered) {
+        this.mdnsRegistry.register();
+    }
+    this.mdnsRegistry.discover();
+}
+
+/**
+ * Performs just registration with mDNS
+ * mDNS registration simply consists of creating an advertisement
+ */
+Registrar.prototype._registerWithMDNS = function() {
     this.mdnsRegistry.register();
 }
 
 /**
- * Registers a node using local storage
+ * Registration/discovery using local storage
  */
-Registrar.prototype._registerWithLocalStorage = function() {
-    this.localRegistry = new LocalRegistry(this.app, this.machType, this.id, this.port);
-
+Registrar.prototype._registerAndDiscoverWithLocalStorage = function() {
     var self = this;
 
     /* triggered when a fog (or fogs) updates the local storage */
@@ -158,6 +173,17 @@ Registrar.prototype._registerWithLocalStorage = function() {
         }
     });
 
+    if (!this.localRegistry.isRegistered) {
+        this.localRegistry.register();
+    }
+    this.localRegistry.discover();
+}
+
+/**
+ * Register using local storage
+ * This consists of adding ourselves in local storage and setting up check-ins
+ */
+Registrar.prototype._registerWithLocalStorage = function() {
     this.localRegistry.register();
 }
 

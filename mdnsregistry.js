@@ -12,18 +12,26 @@ function MDNSRegistry(app, machType, id, port) {
     this.machType = machType;
     this.id = id;
     this.port = port;
+    this.isRegistered = false;
 }
 
 /* MDNSRegistry inherits from Registry */
 MDNSRegistry.prototype = new Registry();
 
 /**
- * mDNS registration consists of advertisement creation followed by service browsing
+ * mDNS registration consists of advertisement creation
  */
 MDNSRegistry.prototype.register = function() {
     this._createAdvertisement(constants.mdns.retries);
+}
+
+/**
+ * mDNS discovery is simply service browsing
+ */
+MDNSRegistry.prototype.discover = function() {
     this._browse();
 }
+
 
 //------------------------------------------------------------------------------
 // Advertisement creation
@@ -33,11 +41,16 @@ MDNSRegistry.prototype.register = function() {
  * Attempts to create an mDNS advertisement up to `retries` times
  */
 MDNSRegistry.prototype._createAdvertisement = function(retries) {
+    if (retries === null) {
+        retries = constants.mdns.retries;
+    }
     // advertise a service named `app-machType`, e.g. `myApplication-DEVICE`
     this.ad = mdns.createAdvertisement(mdns.tcp(this.app + '-' + this.machType), this.port, {name: this.id}, function(err, service) {
         if (err) {
             retries--;
             this._handleError(err, retries);
+        } else {
+            this.isRegistered = true;
         }
     });
     this.ad.start();

@@ -1,9 +1,5 @@
 0 info it worked if it ends with ok
-1 verbose cli [ '/usr/local/bin/node',
-1 verbose cli   '/usr/local/bin/npm',
-1 verbose cli   'start',
-1 verbose cli   'fog',
-1 verbose cli   'r' ]
+1 verbose cli [ '/usr/local/bin/node', '/usr/local/bin/npm', 'start', 'fog' ]
 2 info using npm@3.10.10
 3 info using node@v6.9.5
 4 verbose run-script [ 'prestart', 'start', 'poststart' ]
@@ -13,10 +9,10 @@
 8 verbose lifecycle node-localstorage-test@1.0.0~start: unsafe-perm in lifecycle true
 9 verbose lifecycle node-localstorage-test@1.0.0~start: PATH: /usr/local/lib/node_modules/npm/bin/node-gyp-bin:/Users/kstricks/Documents/McGill/4thyear/second_term/400/combo/node_modules/.bin:/usr/local/Homebrew/sbin:/usr/local/Homebrew/bin:/Users/kstricks/.rbenv/shims:/usr/local/bin:/Library/Java/JavaVirtualMachines/jdk1.8.0_60.jdk/Contents/Home/bin:/Users/kstricks/Documents/McGill/4thyear/second_term/520/assignments/peephole/PeepholeContest/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/go/bin:/Library/TeX/texbin:/Users/kstricks/bin:/Users/kstricks/Documents/workspaces/go/bin:/bin:/usr/local/mysql/bin:/usr/bin/mono:/Library/Java/JavaVirtualMachines/jdk1.8.0_91.jdk/Contents/Home/bin:/usr/local/apache-maven-3.3.9/bin
 10 verbose lifecycle node-localstorage-test@1.0.0~start: CWD: /Users/kstricks/Documents/McGill/4thyear/second_term/400/combo
-11 silly lifecycle node-localstorage-test@1.0.0~start: Args: [ '-c', 'node app.js "fog" "r"' ]
+11 silly lifecycle node-localstorage-test@1.0.0~start: Args: [ '-c', 'node app.js "fog"' ]
 12 silly lifecycle node-localstorage-test@1.0.0~start: Returned: code: 1  signal: null
 13 info lifecycle node-localstorage-test@1.0.0~start: Failed to exec start script
-14 verbose stack Error: node-localstorage-test@1.0.0 start: `node app.js "fog" "r"`
+14 verbose stack Error: node-localstorage-test@1.0.0 start: `node app.js "fog"`
 14 verbose stack Exit status 1
 14 verbose stack     at EventEmitter.<anonymous> (/usr/local/lib/node_modules/npm/lib/utils/lifecycle.js:255:16)
 14 verbose stack     at emitTwo (events.js:106:13)
@@ -29,18 +25,18 @@
 15 verbose pkgid node-localstorage-test@1.0.0
 16 verbose cwd /Users/kstricks/Documents/McGill/4thyear/second_term/400/combo
 17 error Darwin 16.4.0
-18 error argv "/usr/local/bin/node" "/usr/local/bin/npm" "start" "fog" "r"
+18 error argv "/usr/local/bin/node" "/usr/local/bin/npm" "start" "fog"
 19 error node v6.9.5
 20 error npm  v3.10.10
 21 error code ELIFECYCLE
-22 error node-localstorage-test@1.0.0 start: `node app.js "fog" "r"`
+22 error node-localstorage-test@1.0.0 start: `node app.js "fog"`
 22 error Exit status 1
-23 error Failed at the node-localstorage-test@1.0.0 start script 'node app.js "fog" "r"'.
+23 error Failed at the node-localstorage-test@1.0.0 start script 'node app.js "fog"'.
 23 error Make sure you have the latest version of node.js and npm installed.
 23 error If you do, this is most likely a problem with the node-localstorage-test package,
 23 error not with npm itself.
 23 error Tell the author that this fails on your system:
-23 error     node app.js "fog" "r"
+23 error     node app.js "fog"
 23 error You can get information on how to open an issue for this project with:
 23 error     npm bugs node-localstorage-test
 23 error Or if that isn't available, you can get their info via:

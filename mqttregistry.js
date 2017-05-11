@@ -75,7 +75,7 @@ MQTTRegistry.prototype.addSub = function(topic, qos, emitTag) {
     });
 }
 
-MQTTRegistry.prototype.register = function() {
+MQTTRegistry.prototype.registerAndDiscover = function() {
     // create an mqtt client
     var client = mqtt.connect(constants.mqtt.brokerUrl, this._getConnectionOptions(this.app, this.machType, this.id));
     // save the client on the registrar for future use
