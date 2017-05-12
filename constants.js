@@ -13,6 +13,11 @@ module.exports = {
             MQTT: 'mqtt',
             MDNS: 'mdns',
             LOCALSTORAGE: 'localStorage'
+        }),
+        channels: Object.freeze({
+            DEFAULT: 0,
+            MDNS_LOCAL: 1,
+            LS_LOCAL: 2
         })
     },
 
@@ -38,6 +43,7 @@ module.exports = {
         initRetryInterval: 1000, // 1 second
         addIdRetryInterval: 1000, // 1 second
         checkinRetryInterval: 200, // 200 ms
+        updateEntryRetryInterval: 100, // 100 ms
         stale: 1000, // 1 second
         numBins: 10 // number of fog and cloud bins to use
     }

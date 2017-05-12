@@ -23,7 +23,7 @@ function LocalRegistry(app, machType, id, port) {
     this.appDir = os.homedir() + '/.' + app;
     this.lastScanAt = 0;
     this.currentOfflineMachs = {};
-    this.isRegistered = false;
+    this.discoveryKeys = [];
 }
 
 /* LocalRegistry inherits from Registry */
@@ -67,6 +67,7 @@ LocalRegistry.prototype._initLocalStorage = function(self, cb) {
 /**
  * API for local storage registration/discovery
  */
+/*
 LocalRegistry.prototype.registerAndDiscover = function() {
     // first step in registration is initializing the local storage
     var self = this;
@@ -106,6 +107,7 @@ LocalRegistry.prototype._registerAndDiscover = function(self) {
         });
     }
 }
+*/
 
 /**
  * API for local storage registration
@@ -119,6 +121,33 @@ LocalRegistry.prototype.register = function() {
     });
 }
 
+LocalRegistry.prototype.addRegistration = function(key, value) {
+    this._addRegistration(key, value, this);
+}
+
+LocalRegistry.prototype._addRegistration = function(key, value, self) {
+    var binName = null;
+    if (self.machType === constants.globals.NodeType.DEVICE) {
+        // Nothing for now
+    } else if (self.machType === constants.globals.NodeType.FOG) {
+        binName = 'fogs_' + self.bin;
+    } else {
+        binName = 'clouds_' + self.bin;
+    }
+    if (binName !== null) {
+        lockFile.lock(binName, { stale: constants.localStorage.stale }, function (err) {
+            if (err) {
+                setTimeout(self._addRegistration, constants.localStorage.updateEntryRetryInterval, key, value, self);
+                return;
+            }
+            var nodes = JSON.parse(self.localStorage.getItem(binName));
+            nodes[self.id][key] = true;
+            self.localStorage.setItem(binName, JSON.stringify(nodes));
+            lockFile.unlockSync(binName);
+        });
+    }
+}
+
 /**
  * Just the registration bits for local storage
  */
@@ -130,7 +159,8 @@ LocalRegistry.prototype._register = function(self) {
         port: self.port,
         lastCheckIn: now,
         createdAt: now,
-        updatedAt: now
+        updatedAt: now,
+        default: true
     };
 
     if (self.machType === constants.globals.NodeType.DEVICE) {
@@ -146,13 +176,13 @@ LocalRegistry.prototype._register = function(self) {
             setInterval(self._cloudCheckIn, constants.localStorage.checkInInterval, self);
         });
     }
-    self.isRegistered = true;
 }
 
 /**
- * API for local storage discovery
+ * API for local storage discovery of nodes with the given keys
  */
-LocalRegistry.prototype.discover = function() {
+LocalRegistry.prototype.discover = function(keys) {
+    this.discoveryKeys = this.discoveryKeys.concat(keys);
     if (this.localStorage !== null) {
         this._discover(self);
     } else {
@@ -219,7 +249,7 @@ LocalRegistry.prototype._addFog = function(data, self, cb) {
         if (err) {
             //console.log(err);
             //console.log('failed to acquire fog lock, trying again later');
-            setTimeout(self._addFog, constants.localStorage.addIdRetryInterval, data, self);
+            setTimeout(self._addFog, constants.localStorage.addIdRetryInterval, data, self, cb);
             return;
         }
         //console.log('successfully locked fog lock');
@@ -241,7 +271,7 @@ LocalRegistry.prototype._addCloud = function(data, self, cb) {
     lockFile.lock(binName, { stale: constants.localStorage.stale }, function (err) {
         if (err) {
             //console.log('failed to acquire cloud lock, trying again later');
-            setTimeout(self._addCloud, constants.localStorage.addIdRetryInterval, data, self);
+            setTimeout(self._addCloud, constants.localStorage.addIdRetryInterval, data, self, cb);
             return;
         }
         //console.log('successfully locked cloud lock');
@@ -342,21 +372,42 @@ LocalRegistry.prototype._scanForClouds = function(self) {
      var newlyOfflineMachs = [];
      var now = Date.now();
      for (var machId in machs) {
-         // first, check if the node has gone offline
-         if ((now - machs[machId].lastCheckIn) > 2 * constants.localStorage.checkInInterval) {
-             // if we haven't already noted that the machine is offline...
-             if (!self.currentOfflineMachs[machId]) {
-                 newlyOfflineMachs.push(machId);
-                 self.currentOfflineMachs[machId] = true;
+         var examineMach = false;
+         for (var i in self.discoveryKeys) {
+             if (machs[machId].hasOwnProperty(self.discoveryKeys[i])) {
+                 // this machine is relevant to us
+                 examineMach = true;
+                 break;
              }
-         } else if (machs[machId].updatedAt > self.lastScanAt) {
-             newlyOnlineMachs.push(machId);
-             // in case we currently have this node recorded as offline
-             delete self.currentOfflineMachs[machId];
+         }
+         if (examineMach) {
+             // first, check if the node has gone offline
+             if ((now - machs[machId].lastCheckIn) > 2 * constants.localStorage.checkInInterval) {
+                 // if we haven't already noted that the machine is offline...
+                 if (!self.currentOfflineMachs[machId]) {
+                     newlyOfflineMachs.push(machId);
+                     self.currentOfflineMachs[machId] = true;
+                 }
+             } else if (machs[machId].updatedAt > self.lastScanAt) {
+                 newlyOnlineMachs.push(machId);
+                 // in case we currently have this node recorded as offline
+                 delete self.currentOfflineMachs[machId];
+             }
          }
      }
      return { newlyOnlineMachs: newlyOnlineMachs, newlyOfflineMachs: newlyOfflineMachs };
  }
+
+LocalRegistry.prototype.addDiscoveryKey = function(key) {
+    this.discoveryKeys.push(key);
+}
+
+LocalRegistry.prototype.removeDiscoveryKey = function(key) {
+    var index = this.discoveryKeys.indexOf(key);
+    if (index !== -1) {
+        this.discoveryKeys.splice(index, 1);
+    }
+}
 
 /*
  * Hash a uuid into an integer in the range 0 to constants.localStorage.numBins-1

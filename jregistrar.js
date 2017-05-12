@@ -1,5 +1,5 @@
 var EventEmitter = require('events'),
-    globals = require('./constants').globals;
+    globals = require('./constants').globals,
     MQTTRegistry = require('./mqttregistry'),
     MDNSRegistry = require('./mdnsregistry'),
     LocalRegistry = require('./localregistry');
@@ -30,19 +30,27 @@ Registrar.prototype.registerAndDiscover = function(startWith) {
     this.localRegistry = new LocalRegistry(this.app, this.machType, this.id, this.port);
     switch(startWith) {
         case globals.protocols.MDNS:
+            console.log('fix');
+            /*
             // register with local storage
-            this.localRegistry._registerWithLocalStorage();
+            this.localRegistry.register();
             // register and discover with mdns
             this._registerAndDiscoverWithMDNS();
+            */
             break;
         case globals.protocols.LOCALSTORAGE:
+            console.log('fix');
             // register and discover using local storage
-            this._registerAndDiscoverWithLocalStorage();
+            //this._registerAndDiscoverWithLocalStorage();
             break;
         default:
-            // register with mDNS and local storage
-            this.mdnsRegistry._registerWithMDNS();
-            this.localRegistry._registerWithLocalStorage();
+            // register with mDNS and local storage so that other nodes that fail
+            // to use MQTT can still discover this one
+            this.mdnsRegistry.register([ globals.channels.DEFAULT ]);
+            this.localRegistry.register();
+            // discover nodes using mDNS and local storage
+            this.mdnsRegistry.discover([ globals.channels.MDNS_LOCAL ]);
+            this.localRegistry.discover([ 'local' ]);
             // register and discover using mqtt
             this._registerAndDiscoverWithMQTT();
             break;
@@ -128,19 +136,17 @@ Registrar.prototype._registerAndDiscoverWithMDNS = function() {
         self.emit('cloud-down', cloudId);
     });
 
-    // initiate mDNS registration/discovery
-    if (!this.mdnsRegistry.isRegistered) {
-        this.mdnsRegistry.register();
+    /* initiate mDNS registration/discovery */
+    // already registered to DEFAULT channel, just need to register to MDNS_LOCAL channel now
+    this.mdnsRegistry.register([ globals.channels.MDNS_LOCAL ]);
+    // stop discovery on MDNS_LOCAL channel
+    if (this.machType === globals.NodeType.DEVICE) {
+        this.mdnsRegistry.stopDiscovering([ this.app + '-' + globals.NodeType.FOG + '-' + 'mdnstomqtt' ]);
+    } else if (this.machType === globals.NodeType.FOG) {
+        this.mdnsRegistry.stopDiscovering([ this.app + '-' + globals.NodeType.CLOUD + '-' + 'mdnstomqtt' ]);
     }
-    this.mdnsRegistry.discover();
-}
-
-/**
- * Performs just registration with mDNS
- * mDNS registration simply consists of creating an advertisement
- */
-Registrar.prototype._registerWithMDNS = function() {
-    this.mdnsRegistry.register();
+    // start discovery on DEFAULT channel
+    this.mdnsRegistry.discover([ globals.channels.DEFAULT ]);
 }
 
 /**
@@ -173,18 +179,12 @@ Registrar.prototype._registerAndDiscoverWithLocalStorage = function() {
         }
     });
 
-    if (!this.localRegistry.isRegistered) {
-        this.localRegistry.register();
-    }
-    this.localRegistry.discover();
-}
-
-/**
- * Register using local storage
- * This consists of adding ourselves in local storage and setting up check-ins
- */
-Registrar.prototype._registerWithLocalStorage = function() {
-    this.localRegistry.register();
+    // already registered to DEFAULT channel, just need to register to local channel now
+    this.localRegistry.addRegistration('local');
+    // stop discovery on local channel
+    this.localRegistry.removeDiscoveryKey('local');
+    // start discovery on default channel
+    this.localRegistry.addDiscoveryKey('default');
 }
 
 /* exports */

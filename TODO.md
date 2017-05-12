@@ -1,7 +1,14 @@
 # TODO
 
-- separate registration/discovery in MQTT and fix function names
-- nodes should occasionally try using the next protocol up to see if it works all of a sudden, meaning they can then switch over to it
+- add backoff for retry interval with local registry
+- when a level fails and we fall to the level below, we will immediately discover nodes that we may already have discovered at the previous level: ignore these!
+- nodes using local storage or mdns should occasionally try MQTT to see if it works all of a sudden, meaning they can then switch over to it
+    - using mdns?
+        - just try **registering** with MQTT
+        - if this fails, then stick with mDNS
+        - if this succeeds, then
+            - quit discovery with mDNS
+            - start discovery with MQTT
 
 - before a node tries registering itself using MQTT, it should:
     - [x] create an advertisement on mDNS

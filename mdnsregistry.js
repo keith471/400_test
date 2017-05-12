@@ -12,7 +12,8 @@ function MDNSRegistry(app, machType, id, port) {
     this.machType = machType;
     this.id = id;
     this.port = port;
-    this.isRegistered = false;
+    this.ads = {};
+    this.browsers = {};
 }
 
 /* MDNSRegistry inherits from Registry */
@@ -21,17 +22,31 @@ MDNSRegistry.prototype = new Registry();
 /**
  * mDNS registration consists of advertisement creation
  */
-MDNSRegistry.prototype.register = function() {
-    this._createAdvertisement(constants.mdns.retries);
+MDNSRegistry.prototype.register = function(channels) {
+    for (var i in channels) {
+        this._createAdvertisement(channels[i], constants.mdns.retries);
+    }
 }
 
 /**
  * mDNS discovery is simply service browsing
  */
-MDNSRegistry.prototype.discover = function() {
-    this._browse();
+MDNSRegistry.prototype.discover = function(channels) {
+    for (var i in channels) {
+        this._browse(channels[i]);
+    }
 }
 
+/**
+ * Quit browsing on the given channels
+ */
+MDNSRegistry.prototype.stopDiscovering = function(channelNames) {
+    for (var i in channelNames) {
+        if (this.browsers[channelNames[i]] !== null) {
+            this.browsers[channelNames[i]].stop();
+        }
+    }
+}
 
 //------------------------------------------------------------------------------
 // Advertisement creation
@@ -40,26 +55,34 @@ MDNSRegistry.prototype.discover = function() {
 /**
  * Attempts to create an mDNS advertisement up to `retries` times
  */
-MDNSRegistry.prototype._createAdvertisement = function(retries) {
-    if (retries === null) {
-        retries = constants.mdns.retries;
+MDNSRegistry.prototype._createAdvertisement = function(channel) {
+    var channelName = null;
+    if (channel === constants.globals.channels.DEFAULT) {
+        channelName = this.app + '-' + this.machType;
+    } else if (channel === constants.globals.channels.MDNS_TO_MQTT) {
+        channelName = this.app + '-' + this.machType + '-' + 'mdnstomqtt';
     }
-    // advertise a service named `app-machType`, e.g. `myApplication-DEVICE`
-    this.ad = mdns.createAdvertisement(mdns.tcp(this.app + '-' + this.machType), this.port, {name: this.id}, function(err, service) {
+    if (channelName !== null) {
+        this._createAdvertisementWithName(channelName, retries, this);
+    }
+}
+
+MDNSRegistry.prototype._createAdvertisementWithName = function(name, retries, self) {
+    var ad = mdns.createAdvertisement(mdns.tcp(channelName), self.port, {name: self.id}, function(err, service) {
         if (err) {
             retries--;
-            this._handleError(err, retries);
+            self._handleError(err, ad, name, retries, self);
         } else {
-            this.isRegistered = true;
+            self.ads[channelName] = ad;
         }
     });
-    this.ad.start();
+    ad.start();
 }
 
 /**
  * helper function for handling advertisement errors
  */
-MDNSRegistry.prototype._handleError = function(err, retries) {
+MDNSRegistry.prototype._handleError = function(err, ad, name, retries, self) {
     switch (err.errorCode) {
         // if the error is unknown, then the mdns daemon may currently be down,
         // so try again in 10 seconds
@@ -68,17 +91,17 @@ MDNSRegistry.prototype._handleError = function(err, retries) {
             if (retries === 0) {
                 logger.log.warning('Exhaused all advertisement retries.');
                 // make sure the add is stopped
-                this.ad.stop();
-                this.emit('mdns-ad-error', err);
+                ad.stop();
+                self.emit('mdns-ad-error', err);
             } else {
-                setTimeout(this._createAdvertisement, constants.mdns.retryInterval, retries);
+                setTimeout(self._createAdvertisementWithName, name, retries, self);
             }
             break;
         default:
             logger.log.error('Unhandled service error: ' + err + '. Abandoning mDNS.');
             // make sure the add is stopped
-            this.ad.stop();
-            this.emit('mdns-ad-error', err);
+            ad.stop();
+            self.emit('mdns-ad-error', err);
     }
 }
 
@@ -89,15 +112,34 @@ MDNSRegistry.prototype._handleError = function(err, retries) {
 /**
  * Browses for services
  */
-MDNSRegistry.prototype._browse = function() {
+MDNSRegistry.prototype._browse = function(channel) {
+    var channelName = null;
+    if (channel === constants.globals.channels.DEFAULT) {
+        if (this.machType === constants.globals.NodeType.DEVICE) {
+            channelName = this.app + '-' + constants.globals.NodeType.FOG;
+        } else if (this.machType === constants.globals.NodeType.FOG) {
+            channelName = this.app + '-' + constants.globals.NodeType.CLOUD;
+        }
+    } else if (channel === constants.globals.channels.MDNS_TO_MQTT) {
+        if (this.machType === constants.globals.NodeType.DEVICE) {
+            channelName = this.app + '-' + constants.globals.NodeType.FOG + '-' + 'mdnstomqtt';
+        } else if (this.machType === constants.globals.NodeType.FOG) {
+            channelName = this.app + '-' + constants.globals.NodeType.CLOUD + '-' + 'mdnstomqtt';
+        }
+    }
+    if (channelName !== null) {
+        this._browseForChannelWithName(channelName);
+    }
+}
+
+MDNSRegistry.prototype._browseForChannelWithName = function(name) {
     // the serice a node browses for depends on the type of the node
     /* create the browser */
-    var browser;
+    var browser = mdns.createBrowser(mdns.tcp(name));
+    this.browsers[name] = browser;
     var self = this;
     if (this.machType === constants.globals.NodeType.DEVICE) {
         // devices browse for fogs
-        browser = mdns.createBrowser(mdns.tcp(this.app + '-' + constants.globals.NodeType.FOG));
-
         browser.on('serviceUp', function(service) {
             // ignore our own services
             if (service.name == self.id) {
@@ -115,13 +157,8 @@ MDNSRegistry.prototype._browse = function() {
             self.emit('mdns-fog-down', service.name);
         });
 
-        /* start the browser */
-        browser.start();
-
     } else if (this.machType === constants.globals.NodeType.FOG) {
         // fogs browse for clouds
-        browser = mdns.createBrowser(mdns.tcp(this.app + '-' + constants.globals.NodeType.CLOUD));
-
         browser.on('serviceUp', function(service) {
             // ignore our own services
             if (service.name == self.id) {
@@ -138,11 +175,10 @@ MDNSRegistry.prototype._browse = function() {
         browser.on('serviceDown', function(service) {
             self.emit('mdns-cloud-down', service.name);
         });
-
-        /* start the browser */
-        browser.start();
     }
-    // NOTE: clouds don't browse for anyone
+
+    /* start the browser */
+    browser.start();
 }
 
 MDNSRegistry.prototype._getServiceData = function(service) {
@@ -178,13 +214,6 @@ MDNSRegistry.prototype._getIp = function(addresses) {
         }
     }
     return null;
-}
-
-/**
- * A public helper to quit advertising
- */
-MDNSRegistry.prototype.incognito = function() {
-    this.ad.stop();
 }
 
 /* exports */
