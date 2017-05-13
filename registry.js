@@ -26,7 +26,7 @@ Registry.prototype._getIPv4Address = function() {
                 return nielm[n].address
         }
     }
-    return contants.globals.localhost;
+    return constants.globals.localhost;
 }
 
 /**

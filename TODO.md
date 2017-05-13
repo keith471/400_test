@@ -1,5 +1,6 @@
 # TODO
 
+- test code!
 - add backoff for retry interval with local registry
 - when a level fails and we fall to the level below, we will immediately discover nodes that we may already have discovered at the previous level: ignore these!
 - nodes using local storage or mdns should occasionally try MQTT to see if it works all of a sudden, meaning they can then switch over to it

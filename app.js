@@ -44,7 +44,7 @@ reggie.on('cloud-down', function(cloudId) {
     console.log('Cloud down: ' + cloudId);
 });
 
-reggie.registerAndDiscover(globals.protocols.LOCALSTORAGE);
+reggie.registerAndDiscover();
 
 /*
 function Test() {

@@ -55,7 +55,7 @@ MDNSRegistry.prototype.stopDiscovering = function(channelNames) {
 /**
  * Attempts to create an mDNS advertisement up to `retries` times
  */
-MDNSRegistry.prototype._createAdvertisement = function(channel) {
+MDNSRegistry.prototype._createAdvertisement = function(channel, retries) {
     var channelName = null;
     if (channel === constants.globals.channels.DEFAULT) {
         channelName = this.app + '-' + this.machType;
@@ -68,12 +68,12 @@ MDNSRegistry.prototype._createAdvertisement = function(channel) {
 }
 
 MDNSRegistry.prototype._createAdvertisementWithName = function(name, retries, self) {
-    var ad = mdns.createAdvertisement(mdns.tcp(channelName), self.port, {name: self.id}, function(err, service) {
+    var ad = mdns.createAdvertisement(mdns.tcp(name), self.port, {name: self.id}, function(err, service) {
         if (err) {
             retries--;
             self._handleError(err, ad, name, retries, self);
         } else {
-            self.ads[channelName] = ad;
+            self.ads[name] = ad;
         }
     });
     ad.start();
