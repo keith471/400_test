@@ -42,7 +42,7 @@ MDNSRegistry.prototype.discover = function(channels) {
  */
 MDNSRegistry.prototype.stopDiscovering = function(channelNames) {
     for (var i in channelNames) {
-        if (this.browsers[channelNames[i]] !== null) {
+        if (this.browsers[channelNames[i]] !== undefined) {
             this.browsers[channelNames[i]].stop();
         }
     }
@@ -59,8 +59,8 @@ MDNSRegistry.prototype._createAdvertisement = function(channel, retries) {
     var channelName = null;
     if (channel === constants.globals.channels.DEFAULT) {
         channelName = this.app + '-' + this.machType;
-    } else if (channel === constants.globals.channels.MDNS_TO_MQTT) {
-        channelName = this.app + '-' + this.machType + '-' + 'mdnstomqtt';
+    } else if (channel === constants.globals.channels.MDNS_LOCAL) {
+        channelName = this.app + '-' + this.machType + '-' + 'local';
     }
     if (channelName !== null) {
         this._createAdvertisementWithName(channelName, retries, this);
@@ -73,6 +73,7 @@ MDNSRegistry.prototype._createAdvertisementWithName = function(name, retries, se
             retries--;
             self._handleError(err, ad, name, retries, self);
         } else {
+            console.log('created advertisement for ' + name);
             self.ads[name] = ad;
         }
     });
@@ -120,11 +121,11 @@ MDNSRegistry.prototype._browse = function(channel) {
         } else if (this.machType === constants.globals.NodeType.FOG) {
             channelName = this.app + '-' + constants.globals.NodeType.CLOUD;
         }
-    } else if (channel === constants.globals.channels.MDNS_TO_MQTT) {
+    } else if (channel === constants.globals.channels.MDNS_LOCAL) {
         if (this.machType === constants.globals.NodeType.DEVICE) {
-            channelName = this.app + '-' + constants.globals.NodeType.FOG + '-' + 'mdnstomqtt';
+            channelName = this.app + '-' + constants.globals.NodeType.FOG + '-' + 'local';
         } else if (this.machType === constants.globals.NodeType.FOG) {
-            channelName = this.app + '-' + constants.globals.NodeType.CLOUD + '-' + 'mdnstomqtt';
+            channelName = this.app + '-' + constants.globals.NodeType.CLOUD + '-' + 'local';
         }
     }
     if (channelName !== null) {
@@ -133,6 +134,7 @@ MDNSRegistry.prototype._browse = function(channel) {
 }
 
 MDNSRegistry.prototype._browseForChannelWithName = function(name) {
+    console.log('browsing for channel with name ' + name);
     // the serice a node browses for depends on the type of the node
     /* create the browser */
     var browser = mdns.createBrowser(mdns.tcp(name));

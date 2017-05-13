@@ -30,18 +30,22 @@ Registrar.prototype.registerAndDiscover = function(startWith) {
     this.localRegistry = new LocalRegistry(this.app, this.machType, this.id, this.port);
     switch(startWith) {
         case globals.protocols.MDNS:
-            console.log('fix');
-            /*
-            // register with local storage
+            // basic MQTT set-up
+            this.mdnsRegistry.register([ globals.channels.DEFAULT ]);
             this.localRegistry.register();
-            // register and discover with mdns
+            this.mdnsRegistry.discover([ globals.channels.MDNS_LOCAL ]);
+            this.localRegistry.discover([ 'local' ]);
+            // register and discover using mDNS
             this._registerAndDiscoverWithMDNS();
-            */
             break;
         case globals.protocols.LOCALSTORAGE:
-            console.log('fix');
+            // basic MQTT set-up
+            this.mdnsRegistry.register([ globals.channels.DEFAULT ]);
+            this.localRegistry.register();
+            this.mdnsRegistry.discover([ globals.channels.MDNS_LOCAL ]);
+            this.localRegistry.discover([ 'local' ]);
             // register and discover using local storage
-            //this._registerAndDiscoverWithLocalStorage();
+            this._registerAndDiscoverWithLocalStorage();
             break;
         default:
             // register with mDNS and local storage so that other nodes that fail
@@ -94,10 +98,21 @@ Registrar.prototype._registerAndDiscoverWithMQTT = function() {
     this.mqttRegistry.on('mqtt-reg-error', function() {
         // TODO: could add some number of retries
         // close the connection
+        console.log('mqtt error - falling back on mdns');
         self.mqttRegistry.quit(function() {
             // fall back on mDNS
             self._registerAndDiscoverWithMDNS();
         });
+    });
+
+    /* triggered when a fog goes up */
+    this.mdnsRegistry.on('mdns-fog-up', function(fog) {
+        self.emit('fog-up', fog);
+    });
+
+    /* triggered when a fog goes down */
+    this.mdnsRegistry.on('mdns-fog-down', function(fogId) {
+        self.emit('fog-down', fogId);
     });
 
     // initiate mqtt registration/discovery
@@ -113,6 +128,7 @@ Registrar.prototype._registerAndDiscoverWithMDNS = function() {
 
     /* if mdns error, fall back on local storage */
     this.mdnsRegistry.on('mdns-ad-error', function(err) {
+        console.log('mdns error - falling back on local storage');
         self._registerAndDiscoverWithLocalStorage();
     });
 
@@ -141,9 +157,9 @@ Registrar.prototype._registerAndDiscoverWithMDNS = function() {
     this.mdnsRegistry.register([ globals.channels.MDNS_LOCAL ]);
     // stop discovery on MDNS_LOCAL channel
     if (this.machType === globals.NodeType.DEVICE) {
-        this.mdnsRegistry.stopDiscovering([ this.app + '-' + globals.NodeType.FOG + '-' + 'mdnstomqtt' ]);
+        this.mdnsRegistry.stopDiscovering([ this.app + '-' + globals.NodeType.FOG + '-' + 'local' ]);
     } else if (this.machType === globals.NodeType.FOG) {
-        this.mdnsRegistry.stopDiscovering([ this.app + '-' + globals.NodeType.CLOUD + '-' + 'mdnstomqtt' ]);
+        this.mdnsRegistry.stopDiscovering([ this.app + '-' + globals.NodeType.CLOUD + '-' + 'local' ]);
     }
     // start discovery on DEFAULT channel
     this.mdnsRegistry.discover([ globals.channels.DEFAULT ]);

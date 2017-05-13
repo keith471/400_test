@@ -189,15 +189,16 @@ MQTTRegistry.prototype._registerDevice = function() {
     });
 
     this.client.on('reconnect', function () {
-        //console.log('client reconnected')
+        console.log('client reconnected')
     });
 
     this.client.on('close', function () {
-        //console.log('client disconnected')
+        console.log('client disconnected')
     });
 
     this.client.on('offline', function () {
-        //console.log('client offline');
+        console.log('client offline');
+        self.emit('mqtt-reg-error');
     });
 
     this.client.on('error', function (error) {
@@ -290,15 +291,16 @@ MQTTRegistry.prototype._registerFog = function() {
     });
 
     this.client.on('reconnect', function () {
-        //console.log('client reconnected')
+        console.log('client reconnected')
     });
 
     this.client.on('close', function () {
-        //console.log('client disconnected')
+        console.log('client disconnected')
     });
 
     this.client.on('offline', function () {
-        //console.log('client offline');
+        console.log('client offline');
+        self.emit('mqtt-reg-error');
     });
 
     this.client.on('error', function (error) {
@@ -364,15 +366,16 @@ MQTTRegistry.prototype._registerCloud = function() {
     });
 
     this.client.on('reconnect', function () {
-        //console.log('client reconnected')
+        console.log('client reconnected')
     });
 
     this.client.on('close', function () {
-        //console.log('client disconnected')
+        console.log('client disconnected')
     });
 
     this.client.on('offline', function () {
-        //console.log('client offline');
+        console.log('client offline');
+        self.emit('mqtt-reg-error');
     });
 
     this.client.on('error', function (error) {

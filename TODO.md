@@ -1,6 +1,7 @@
 # TODO
 
 - test code!
+- modify registrar so that everyone listens for events for ALL protocols
 - add backoff for retry interval with local registry
 - when a level fails and we fall to the level below, we will immediately discover nodes that we may already have discovered at the previous level: ignore these!
 - nodes using local storage or mdns should occasionally try MQTT to see if it works all of a sudden, meaning they can then switch over to it
@@ -11,13 +12,8 @@
             - quit discovery with mDNS
             - start discovery with MQTT
 
-- before a node tries registering itself using MQTT, it should:
-    - [x] create an advertisement on mDNS
-    - [x] write itself into local storage
-    --> then, if MQTT fails,
-    - [x] upon beginning MDNS, it need not create an advertisement but simply begin browsing
-    --> then, if mDNS fails,
-    - [x] upon beginning local storage, it need not write itself into local storage but rather begin scanning local storage for other nodes
+- detect when mqtt server goes down and respond to this
+    - read documentation to determine how to detect when this occurs
 - add support for custom subscriptions
 
 ## MQTT
