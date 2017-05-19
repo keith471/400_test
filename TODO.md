@@ -1,20 +1,26 @@
 # TODO
 
-- test code!
-- modify registrar so that everyone listens for events for ALL protocols
-- add backoff for retry interval with local registry
-- when a level fails and we fall to the level below, we will immediately discover nodes that we may already have discovered at the previous level: ignore these!
-- nodes using local storage or mdns should occasionally try MQTT to see if it works all of a sudden, meaning they can then switch over to it
+- add backoff for retry intervals with local registry
+- add some number of retries to mqtt registration
+- handle rediscoveries: when a level fails and we fall to the level below, we will immediately discover nodes that we may already have discovered at the previous level: ignore these!
+    - i.e. we could rediscover nodes at the level we fall to, for example if we start at mqtt and discover some nodes using mdns, and then mqtt fails and we fall back on mdns, we will rediscover the nodes using mdns (and probably other too?)
+- add support for protocol upgrades: nodes using local storage or mdns should occasionally try MQTT to see if it works all of a sudden, meaning they can then switch over to it
     - using mdns?
         - just try **registering** with MQTT
         - if this fails, then stick with mDNS
         - if this succeeds, then
             - quit discovery with mDNS
             - start discovery with MQTT
-
 - detect when mqtt server goes down and respond to this
     - read documentation to determine how to detect when this occurs
+
+
+
 - add support for custom subscriptions
+    - nodes have _attributes_. _attributes_ are <key, value> pairs and are discoverable.
+    - with local storage, you can get away with just scanning fogs or clouds if no custom attributes need to be discovered. But as soon as the node is interested in discovering custom attributes, then it will need to scan over ALL other nodes, regardless of device, fog, cloud distinction (UNLESS it is specified that the node is only interested in, say, DEVICE nodes with attribute DIMMABLE)
+
+## Questions
 
 ## MQTT
 - have nodes responding to queries respond only to the node that made the query, rather than broadcasting an announcement to anyone listening?

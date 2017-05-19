@@ -22,29 +22,37 @@ MDNSRegistry.prototype = new Registry();
 /**
  * mDNS registration consists of advertisement creation
  */
-MDNSRegistry.prototype.register = function(channels) {
-    for (var i in channels) {
-        this._createAdvertisement(channels[i], constants.mdns.retries);
-    }
+MDNSRegistry.prototype.register = function(channel) {
+    this._createAdvertisement(channel, constants.mdns.retries);
 }
 
 /**
  * mDNS discovery is simply service browsing
  */
-MDNSRegistry.prototype.discover = function(channels) {
-    for (var i in channels) {
-        this._browse(channels[i]);
-    }
+MDNSRegistry.prototype.discover = function(channel) {
+    this._browse(channel);
 }
 
 /**
- * Quit browsing on the given channels
+ * Quit browsing on the given channel
  */
-MDNSRegistry.prototype.stopDiscovering = function(channelNames) {
-    for (var i in channelNames) {
-        if (this.browsers[channelNames[i]] !== undefined) {
-            this.browsers[channelNames[i]].stop();
+MDNSRegistry.prototype.stopDiscovering = function(channel) {
+    var channelName = undefined;
+    if (channel === constants.globals.channels.LOCAL) {
+        if (this.machType === constants.globals.NodeType.DEVICE) {
+            channelName = this.app + '-' + constants.globals.NodeType.FOG + '-' + 'local';
+        } else if (this.machType === constants.globals.NodeType.FOG) {
+            channelName = this.app + '-' + constants.globals.NodeType.CLOUD + '-' + 'local';
         }
+    } else if (channel === constants.globals.channels.DEFAULT) {
+        if (this.machType === constants.globals.NodeType.DEVICE) {
+            channelName = this.app + '-' + constants.globals.NodeType.FOG;
+        } else if (this.machType === constants.globals.NodeType.FOG) {
+            channelName = this.app + '-' + constants.globals.NodeType.CLOUD;
+        }
+    }
+    if (channelName !== undefined && this.browsers[channelName] !== undefined) {
+        this.browsers[channelName].stop();
     }
 }
 

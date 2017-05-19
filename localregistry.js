@@ -113,7 +113,7 @@ LocalRegistry.prototype._registerAndDiscover = function(self) {
  * API for local storage registration
  */
 LocalRegistry.prototype.register = function() {
-    // first step in registration is initializing the local storage
+    // initialize the local storage
     var self = this;
     this._initLocalStorage(this, function() {
         // initialization complete; begin actual registration/discovery
@@ -121,38 +121,11 @@ LocalRegistry.prototype.register = function() {
     });
 }
 
-LocalRegistry.prototype.addRegistration = function(key, value) {
-    this._addRegistration(key, value, this);
-}
-
-LocalRegistry.prototype._addRegistration = function(key, value, self) {
-    var binName = null;
-    if (self.machType === constants.globals.NodeType.DEVICE) {
-        // Nothing for now
-    } else if (self.machType === constants.globals.NodeType.FOG) {
-        binName = 'fogs_' + self.bin;
-    } else {
-        binName = 'clouds_' + self.bin;
-    }
-    if (binName !== null) {
-        lockFile.lock(binName, { stale: constants.localStorage.stale }, function (err) {
-            if (err) {
-                setTimeout(self._addRegistration, constants.localStorage.updateEntryRetryInterval, key, value, self);
-                return;
-            }
-            var nodes = JSON.parse(self.localStorage.getItem(binName));
-            nodes[self.id][key] = true;
-            self.localStorage.setItem(binName, JSON.stringify(nodes));
-            lockFile.unlockSync(binName);
-        });
-    }
-}
-
 /**
- * Just the registration bits for local storage
+ * Register a node on local storage by having it write itself into local storage (fogs and clouds only)
  */
 LocalRegistry.prototype._register = function(self) {
-    // create an object to represent the machine
+    // create an object to be written to local storage
     var now = Date.now();
     var data = {
         ip: self._getIPv4Address(),
@@ -163,205 +136,163 @@ LocalRegistry.prototype._register = function(self) {
         default: true
     };
 
-    if (self.machType === constants.globals.NodeType.DEVICE) {
-        // Nothing for now
-    } else if (self.machType === constants.globals.NodeType.FOG) {
-        self._addFog(data, self, function() {
-            // check in every so often to indicate that we're still here
-            setInterval(self._fogCheckIn, constants.localStorage.checkInInterval, self);
-        });
-    } else {
-        self._addCloud(data, self, function() {
-            // check in every so often to indicate that we're still here
-            setInterval(self._cloudCheckIn, constants.localStorage.checkInInterval, self);
-        });
-    }
+    self._addNodeToLocalStorage(data, self, function() {
+        // check in every so often to indicate that we're still here
+        setInterval(self._checkIn, constants.localStorage.checkInInterval, self);
+    });
 }
 
 /**
- * API for local storage discovery of nodes with the given keys
+ * API for local storage discovery of nodes with the given key(s)
  */
 LocalRegistry.prototype.discover = function(keys) {
-    this.discoveryKeys = this.discoveryKeys.concat(keys);
-    if (this.localStorage !== null) {
-        this._discover(self);
+    if (keys.constructor === Array) {
+        this.discoveryKeys = this.discoveryKeys.concat(keys);
     } else {
-        var self = this;
-        this.on('ls-initialized', function() {
-            self._discover(self);
+        this.discoveryKeys.push(keys);
+    }
+    if (!this.scanning) {
+        if (this.localStorage !== null) {
+            this._beginScanning(self);
+        } else {
+            var self = this;
+            this.on('ls-initialized', function() {
+                self._beginScanning(self);
+            });
+        }
+    }
+}
+
+/**
+ * Kick-start scanning
+ * TODO: this will have to be changed when we add custom discoveries
+ */
+LocalRegistry.prototype._beginScanning = function(self) {
+    if (self.machType === constants.globals.NodeType.DEVICE || self.machType === constants.globals.NodeType.FOG) {
+        self._scan(self);
+        setInterval(self._scan, constants.localStorage.scanInterval, self);
+    } else {
+        // Nothing for now
+    }
+    this.scanning = true;
+}
+
+LocalRegistry.prototype.stopDiscovering = function(key) {
+    var index = this.discoveryKeys.indexOf(key);
+    if (index !== -1) {
+        this.discoveryKeys.splice(index, 1);
+    }
+}
+
+LocalRegistry.prototype.addAttribute = function(key, value) {
+    this._addAttribute(key, value, this);
+}
+
+LocalRegistry.prototype._addAttribute = function(key, value, self) {
+    var binName = null;
+    if (self.machType === constants.globals.NodeType.DEVICE) {
+        // Nothing for now
+    } else if (self.machType === constants.globals.NodeType.FOG) {
+        binName = 'fogs_' + self.bin;
+    } else {
+        binName = 'clouds_' + self.bin;
+    }
+    if (binName !== null) {
+        self._addAttributeWithRetry(key, value, binName, self);
+    }
+}
+
+LocalRegistry.prototype._addAttributeWithRetry = function(key, value, binName, self) {
+    lockFile.lock(binName, { stale: constants.localStorage.stale }, function (err) {
+        if (err) {
+            setTimeout(self._addAttributeWithRetry, constants.localStorage.addAttributeRetryInterval, key, value, binName, self);
+            return;
+        }
+        var nodes = JSON.parse(self.localStorage.getItem(binName));
+        nodes[self.id][key] = value;
+        self.localStorage.setItem(binName, JSON.stringify(nodes));
+        lockFile.unlockSync(binName);
+    });
+}
+
+/**
+ * Adds a node's information to local storage
+ */
+LocalRegistry.prototype._addNodeToLocalStorage = function(data, self, cb) {
+    var binName = undefined;
+    if (self.machType === constants.globals.NodeType.FOG) {
+        binName = 'fogs_' + self.bin;
+    } else if (self.machType === constants.globals.NodeType.CLOUD) {
+        binName = 'clouds_' + self.bin;
+    }
+    if (binName !== undefined) {
+        lockFile.lock(binName, { stale: constants.localStorage.stale }, function (err) {
+            if (err) {
+                setTimeout(self._addNodeToLocalStorage, constants.localStorage.addIdRetryInterval, data, self, cb);
+                return;
+            }
+            var nodes = JSON.parse(self.localStorage.getItem(binName));
+            nodes[self.id] = data;
+            self.localStorage.setItem(binName, JSON.stringify(nodes));
+            lockFile.unlockSync(binName);
+            cb();
         });
     }
 }
 
 /**
- * Just local storage discovery
+ * Update lastCheckIn field
  */
-LocalRegistry.prototype._discover = function(self) {
-    if (self.machType === constants.globals.NodeType.DEVICE) {
-        // scan for fogs every so often
-        self._scanForFogs(self);
-        setInterval(self._scanForFogs, constants.localStorage.scanInterval, self);
-    } else if (self.machType === constants.globals.NodeType.FOG) {
-        // scan for clouds every so often
-        self._scanForClouds(self);
-        setInterval(self._scanForClouds, constants.localStorage.scanInterval, self);
-    } else {
-        // Nothing for now
-    }
-}
-
-/**
- * Check-in
- */
-/*
 LocalRegistry.prototype._checkIn = function(self) {
-    if (self.machType === constants.globals.NodeType.DEVICE) {
-        // currently, do nothing
-    } else if (self.machType === constants.globals.NodeType.FOG) {
-        self._fogCheckIn(self);
-    } else {
-        self._cloudCheckIn(self);
+    var binName = undefined;
+    if (self.machType === constants.globals.NodeType.FOG) {
+        binName = 'fogs_' + self.bin;
+    } else if (self.machType === constants.globals.NodeType.CLOUD) {
+        binName = 'clouds_' + self.bin;
+    }
+    if (binName !== undefined) {
+        lockFile.lock(binName, { stale: constants.localStorage.stale }, function (err) {
+            if (err) {
+                setTimeout(self._checkIn, constants.localStorage.checkinRetryInterval, self);
+                return;
+            }
+            var nodes = JSON.parse(self.localStorage.getItem(binName));
+            nodes[self.id].lastCheckIn = Date.now();
+            self.localStorage.setItem(binName, JSON.stringify(nodes));
+            lockFile.unlockSync(binName);
+        });
     }
 }
-*/
 
 /**
- * Scan
+ * Scans local storage for newly online/offline nodes every x seconds
  */
-/*
 LocalRegistry.prototype._scan = function(self) {
+    var binName;
+    var baseName;
     if (self.machType === constants.globals.NodeType.DEVICE) {
-        self._scanForFogs(self);
-    } else if (self.machType === constants.globals.NodeType.FOG) {
-        self._scanForClouds(self);
-    } else {
-        // currently, do nothing
+        baseName = 'fogs_';
+    } else if (self.machType === constants.globals.NodeType.FOG){
+        baseName = 'clouds_';
     }
-}
-*/
-
-/**
- * Adds a fog's id to the 'fogs' list in local storage
- */
-LocalRegistry.prototype._addFog = function(data, self, cb) {
-    var binName = 'fogs_' + self.bin;
-    lockFile.lock(binName, { stale: constants.localStorage.stale }, function (err) {
-        if (err) {
-            //console.log(err);
-            //console.log('failed to acquire fog lock, trying again later');
-            setTimeout(self._addFog, constants.localStorage.addIdRetryInterval, data, self, cb);
-            return;
-        }
-        //console.log('successfully locked fog lock');
-        var fogs = JSON.parse(self.localStorage.getItem(binName));
-        //console.log('successfully wrote fog to fogs')
-        fogs[self.id] = data;
-        //console.log(fogs);
-        self.localStorage.setItem(binName, JSON.stringify(fogs));
-        lockFile.unlockSync(binName);
-        cb();
-    });
-}
-
-/**
- * Adds a cloud's id to the 'clouds' list in local storage
- */
-LocalRegistry.prototype._addCloud = function(data, self, cb) {
-    var binName = 'clouds_' + self.bin;
-    lockFile.lock(binName, { stale: constants.localStorage.stale }, function (err) {
-        if (err) {
-            //console.log('failed to acquire cloud lock, trying again later');
-            setTimeout(self._addCloud, constants.localStorage.addIdRetryInterval, data, self, cb);
-            return;
-        }
-        //console.log('successfully locked cloud lock');
-        var clouds = JSON.parse(self.localStorage.getItem(binName));
-        clouds[self.id] = data;
-        self.localStorage.setItem(binName, JSON.stringify(clouds));
-        lockFile.unlock(binName);
-        cb();
-    });
-}
-
-/**
- * Update lastCheckIn field
- */
-LocalRegistry.prototype._fogCheckIn = function(self) {
-    var binName = 'fogs_' + self.bin;
-    lockFile.lock(binName, { stale: constants.localStorage.stale }, function (err) {
-        if (err) {
-            //console.log(err);
-            //console.log('failed to acquire fog lock, trying again later');
-            setTimeout(self._fogCheckIn, constants.localStorage.checkinRetryInterval, self);
-            return;
-        }
-        //console.log('successfully locked fog lock');
-        var fogs = JSON.parse(self.localStorage.getItem(binName));
-        fogs[self.id].lastCheckIn = Date.now();
-        self.localStorage.setItem(binName, JSON.stringify(fogs));
-        lockFile.unlockSync(binName);
-    });
-}
-
-/**
- * Update lastCheckIn field
- */
-LocalRegistry.prototype._cloudCheckIn = function(self) {
-    // just check-in
-    var binName = 'clouds_' + self.bin;
-    lockFile.lock(binName, { stale: constants.localStorage.stale }, function (err) {
-        if (err) {
-            //console.log(err);
-            //console.log('failed to acquire cloud lock, trying again later');
-            setTimeout(self._cloudCheckIn, constants.localStorage.checkinRetryInterval, self);
-            return;
-        }
-        //console.log('successfully locked cloud lock');
-        var clouds = JSON.parse(self.localStorage.getItem(binName));
-        clouds[self.id].lastCheckIn = Date.now();
-        self.localStorage.setItem(binName, JSON.stringify(clouds));
-        lockFile.unlockSync(binName);
-    });
-}
-
-/**
- * Scans local storage for new fogs every x seconds
- */
-LocalRegistry.prototype._scanForFogs = function(self) {
-    var binName;
-    var fogs;
+    var nodes;
     var updates;
-    var newlyOnlineFogs = [];
-    var newlyOfflineFogs = [];
+    var newlyOnlineNodes = [];
+    var newlyOfflineNodes = [];
     for (var i = 0; i < constants.localStorage.numBins; i++) {
-        binName = 'fogs_' + i;
-        fogs = JSON.parse(self.localStorage.getItem(binName));
-        updates = self._getUpdate(fogs, self);
-        newlyOnlineFogs = newlyOnlineFogs.concat(updates.newlyOnlineMachs);
-        newlyOfflineFogs = newlyOfflineFogs.concat(updates.newlyOfflineMachs);
+        binName = baseName + i;
+        nodes = JSON.parse(self.localStorage.getItem(binName));
+        updates = self._getUpdate(nodes, self);
+        newlyOnlineNodes = newlyOnlineNodes.concat(updates.newlyOnlineMachs);
+        newlyOfflineNodes = newlyOfflineNodes.concat(updates.newlyOfflineMachs);
     }
     self.lastScanAt = Date.now();
-    self.emit('ls-fog-update', { newlyOnlineFogs: newlyOnlineFogs, newlyOfflineFogs: newlyOfflineFogs });
-}
-
-/**
- * Scans local storage for new clouds every x seconds
- */
-LocalRegistry.prototype._scanForClouds = function(self) {
-    var binName;
-    var clouds;
-    var updates;
-    var newlyOnlineClouds = [];
-    var newlyOfflineClouds = [];
-    for (var i = 0; i < constants.localStorage.numBins; i++) {
-        binName = 'clouds_' + i;
-        clouds = JSON.parse(self.localStorage.getItem(binName));
-        updates = self._getUpdate(clouds, self);
-        newlyOnlineClouds = newlyOnlineClouds.concat(updates.newlyOnlineMachs);
-        newlyOfflineClouds = newlyOfflineClouds.concat(updates.newlyOfflineMachs);
+    var results = { online: newlyOnlineNodes, offline: newlyOfflineNodes };
+    if (self.machType === constants.globals.NodeType.DEVICE) {
+        self.emit('ls-fog-update', results);
+    } else if (self.machType === constants.globals.NodeType.FOG){
+        self.emit('ls-cloud-update', results);
     }
-    self.lastScanAt = Date.now();
-    self.emit('ls-cloud-update', { newlyOnlineClouds: newlyOnlineClouds, newlyOfflineClouds: newlyOfflineClouds });
 }
 
 /**
@@ -397,17 +328,6 @@ LocalRegistry.prototype._scanForClouds = function(self) {
      }
      return { newlyOnlineMachs: newlyOnlineMachs, newlyOfflineMachs: newlyOfflineMachs };
  }
-
-LocalRegistry.prototype.addDiscoveryKey = function(key) {
-    this.discoveryKeys.push(key);
-}
-
-LocalRegistry.prototype.removeDiscoveryKey = function(key) {
-    var index = this.discoveryKeys.indexOf(key);
-    if (index !== -1) {
-        this.discoveryKeys.splice(index, 1);
-    }
-}
 
 /*
  * Hash a uuid into an integer in the range 0 to constants.localStorage.numBins-1
