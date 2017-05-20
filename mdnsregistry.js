@@ -78,7 +78,6 @@ MDNSRegistry.prototype._createAdvertisement = function(channel, retries) {
 MDNSRegistry.prototype._createAdvertisementWithName = function(name, retries, self) {
     var ad = mdns.createAdvertisement(mdns.tcp(name), self.port, {name: self.id}, function(err, service) {
         if (err) {
-            retries--;
             self._handleError(err, ad, name, retries, self);
         } else {
             console.log('created advertisement for ' + name);
@@ -94,7 +93,7 @@ MDNSRegistry.prototype._createAdvertisementWithName = function(name, retries, se
 MDNSRegistry.prototype._handleError = function(err, ad, name, retries, self) {
     switch (err.errorCode) {
         // if the error is unknown, then the mdns daemon may currently be down,
-        // so try again in 10 seconds
+        // so try again in some number of seconds
         case mdns.kDNSServiceErr_Unknown:
             logger.log.error('Unknown service error: ' + err);
             if (retries === 0) {
@@ -103,7 +102,7 @@ MDNSRegistry.prototype._handleError = function(err, ad, name, retries, self) {
                 ad.stop();
                 self.emit('mdns-ad-error', err);
             } else {
-                setTimeout(self._createAdvertisementWithName, name, retries, self);
+                setTimeout(self._createAdvertisementWithName, constants.mdns.retryInterval, name, retries - 1, self);
             }
             break;
         default:

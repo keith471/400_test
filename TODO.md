@@ -1,7 +1,6 @@
 # TODO
 
-- add backoff for retry intervals with local registry
-- add some number of retries to mqtt registration
+- logically think about what rediscoveries mean, and how you can be sure something is a rediscovery, then eliminate them
 - handle rediscoveries: when a level fails and we fall to the level below, we will immediately discover nodes that we may already have discovered at the previous level: ignore these!
     - i.e. we could rediscover nodes at the level we fall to, for example if we start at mqtt and discover some nodes using mdns, and then mqtt fails and we fall back on mdns, we will rediscover the nodes using mdns (and probably other too?)
 - add support for protocol upgrades: nodes using local storage or mdns should occasionally try MQTT to see if it works all of a sudden, meaning they can then switch over to it

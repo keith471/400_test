@@ -29,41 +29,6 @@ function LocalRegistry(app, machType, id, port) {
 /* LocalRegistry inherits from Registry */
 LocalRegistry.prototype = new Registry();
 
-LocalRegistry.prototype._initLocalStorage = function(self, cb) {
-    lockFile.lock(constants.localStorage.initLock, { stale: constants.localStorage.stale }, function (err) {
-        if (err) {
-            // failed to acquire lock, which means someone else already has it; wait until the node with the lock
-            // has finished initializing local storage
-            grabbedLock = false;
-            var tempLs;
-            while (true) {
-                tempLs = new LocalStorage(self.appDir);
-                if (tempLs.getItem('initialized')) {
-                    self.localStorage = tempLs;
-                    break;
-                }
-            }
-            self.emit('ls-initialized');
-            cb();
-            return;
-        }
-
-        // we've grabbed the lock
-        self.localStorage = new LocalStorage(self.appDir);
-        if (!self.localStorage.getItem('initialized')) {
-            // we need to perform the initialization
-            for (var i = 0; i < constants.localStorage.numBins; i++) {
-                self.localStorage.setItem('fogs_' + i, '{}');
-                self.localStorage.setItem('clouds_' + i, '{}');
-            }
-            self.localStorage.setItem('initialized', 'true');
-        }
-        lockFile.unlockSync(constants.localStorage.initLock);
-        self.emit('ls-initialized');
-        cb();
-    });
-}
-
 /**
  * API for local storage registration/discovery
  */
@@ -121,6 +86,42 @@ LocalRegistry.prototype.register = function() {
     });
 }
 
+
+LocalRegistry.prototype._initLocalStorage = function(self, cb) {
+    lockFile.lock(constants.localStorage.initLock, { stale: constants.localStorage.stale }, function (err) {
+        if (err) {
+            // failed to acquire lock, which means someone else already has it; wait until the node with the lock
+            // has finished initializing local storage
+            grabbedLock = false;
+            var tempLs;
+            while (true) {
+                tempLs = new LocalStorage(self.appDir);
+                if (tempLs.getItem('initialized')) {
+                    self.localStorage = tempLs;
+                    break;
+                }
+            }
+            self.emit('ls-initialized');
+            cb();
+            return;
+        }
+
+        // we've grabbed the lock
+        self.localStorage = new LocalStorage(self.appDir);
+        if (!self.localStorage.getItem('initialized')) {
+            // we need to perform the initialization
+            for (var i = 0; i < constants.localStorage.numBins; i++) {
+                self.localStorage.setItem('fogs_' + i, '{}');
+                self.localStorage.setItem('clouds_' + i, '{}');
+            }
+            self.localStorage.setItem('initialized', 'true');
+        }
+        lockFile.unlockSync(constants.localStorage.initLock);
+        self.emit('ls-initialized');
+        cb();
+    });
+}
+
 /**
  * Register a node on local storage by having it write itself into local storage (fogs and clouds only)
  */
@@ -136,9 +137,9 @@ LocalRegistry.prototype._register = function(self) {
         default: true
     };
 
-    self._addNodeToLocalStorage(data, self, function() {
+    self._addNodeToLocalStorage(data, 1, self, function() {
         // check in every so often to indicate that we're still here
-        setInterval(self._checkIn, constants.localStorage.checkInInterval, self);
+        setInterval(self._checkIn, 1, self);
     });
 }
 
@@ -198,14 +199,14 @@ LocalRegistry.prototype._addAttribute = function(key, value, self) {
         binName = 'clouds_' + self.bin;
     }
     if (binName !== null) {
-        self._addAttributeWithRetry(key, value, binName, self);
+        self._addAttributeWithRetry(key, value, binName, 1, self);
     }
 }
 
-LocalRegistry.prototype._addAttributeWithRetry = function(key, value, binName, self) {
+LocalRegistry.prototype._addAttributeWithRetry = function(key, value, binName, attemptNumber, self) {
     lockFile.lock(binName, { stale: constants.localStorage.stale }, function (err) {
         if (err) {
-            setTimeout(self._addAttributeWithRetry, constants.localStorage.addAttributeRetryInterval, key, value, binName, self);
+            setTimeout(self._addAttributeWithRetry, self._getWaitTime(attemptNumber), key, value, binName, attemptNumber+1, self);
             return;
         }
         var nodes = JSON.parse(self.localStorage.getItem(binName));
@@ -218,7 +219,7 @@ LocalRegistry.prototype._addAttributeWithRetry = function(key, value, binName, s
 /**
  * Adds a node's information to local storage
  */
-LocalRegistry.prototype._addNodeToLocalStorage = function(data, self, cb) {
+LocalRegistry.prototype._addNodeToLocalStorage = function(data, attemptNumber, self, cb) {
     var binName = undefined;
     if (self.machType === constants.globals.NodeType.FOG) {
         binName = 'fogs_' + self.bin;
@@ -228,7 +229,7 @@ LocalRegistry.prototype._addNodeToLocalStorage = function(data, self, cb) {
     if (binName !== undefined) {
         lockFile.lock(binName, { stale: constants.localStorage.stale }, function (err) {
             if (err) {
-                setTimeout(self._addNodeToLocalStorage, constants.localStorage.addIdRetryInterval, data, self, cb);
+                setTimeout(self._addNodeToLocalStorage, self._getWaitTime(attemptNumber), data, attemptNumber+1, self, cb);
                 return;
             }
             var nodes = JSON.parse(self.localStorage.getItem(binName));
@@ -240,10 +241,17 @@ LocalRegistry.prototype._addNodeToLocalStorage = function(data, self, cb) {
     }
 }
 
+/*
+ * Helper for computing wait time
+ */
+LocalRegistry.prototype._getWaitTime = function(attemptNumber) {
+    return Math.ceil(Math.random() * Math.pow(2, attemptNumber));
+}
+
 /**
  * Update lastCheckIn field
  */
-LocalRegistry.prototype._checkIn = function(self) {
+LocalRegistry.prototype._checkIn = function(attemptNumber, self) {
     var binName = undefined;
     if (self.machType === constants.globals.NodeType.FOG) {
         binName = 'fogs_' + self.bin;
@@ -253,7 +261,7 @@ LocalRegistry.prototype._checkIn = function(self) {
     if (binName !== undefined) {
         lockFile.lock(binName, { stale: constants.localStorage.stale }, function (err) {
             if (err) {
-                setTimeout(self._checkIn, constants.localStorage.checkinRetryInterval, self);
+                setTimeout(self._checkIn, self._getWaitTime(attemptNumber), attemptNumber+1, self);
                 return;
             }
             var nodes = JSON.parse(self.localStorage.getItem(binName));
