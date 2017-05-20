@@ -1,23 +1,27 @@
 
 
-module.exports = {
+module.exports = Object.freeze.({
 
     globals: {
-        NodeType: Object.freeze({
+        NodeType: {
             DEVICE: 'device',
             FOG: 'fog',
             CLOUD: 'cloud'
-        }),
+        },
+        Status: {
+            ONLINE: 'online',
+            OFFLINE: 'offline'
+        },
         localhost: '127.0.0.1',
-        protocols: Object.freeze({
+        protocols: {
             MQTT: 'mqtt',
             MDNS: 'mdns',
             LOCALSTORAGE: 'localStorage'
-        }),
-        channels: Object.freeze({
+        },
+        channels: {
             DEFAULT: 0,
             LOCAL: 1
-        })
+        }
     },
 
     mqtt: {
@@ -42,4 +46,4 @@ module.exports = {
         stale: 1000, // 1 second
         numBins: 10 // number of fog and cloud bins to use
     }
-}
+});

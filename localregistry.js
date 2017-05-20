@@ -328,7 +328,7 @@ LocalRegistry.prototype._scan = function(self) {
                      self.currentOfflineMachs[machId] = true;
                  }
              } else if (machs[machId].updatedAt > self.lastScanAt) {
-                 newlyOnlineMachs.push(machId);
+                 newlyOnlineMachs.push({ id: machId, ip: machs[machId].ip, port: machs[machId].port });
                  // in case we currently have this node recorded as offline
                  delete self.currentOfflineMachs[machId];
              }
