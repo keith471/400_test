@@ -18,7 +18,7 @@ function LocalRegistry(app, machType, id, port) {
     this.port = port;
     this.ip = this._getIPv4Address();
     this.localStorage = null;
-    this.bin = hash(this.id);
+    this.binName = this._getBinName();
     // put the 'app' as a hidden directory in user's home
     this.appDir = os.homedir() + '/.' + app;
     this.lastScanAt = 0;
@@ -186,33 +186,40 @@ LocalRegistry.prototype.stopDiscovering = function(key) {
 }
 
 LocalRegistry.prototype.addAttribute = function(key, value) {
-    this._addAttribute(key, value, this);
-}
-
-LocalRegistry.prototype._addAttribute = function(key, value, self) {
-    var binName = null;
-    if (self.machType === constants.globals.NodeType.DEVICE) {
-        // Nothing for now
-    } else if (self.machType === constants.globals.NodeType.FOG) {
-        binName = 'fogs_' + self.bin;
-    } else {
-        binName = 'clouds_' + self.bin;
-    }
-    if (binName !== null) {
-        self._addAttributeWithRetry(key, value, binName, 1, self);
+    if (this.binName !== undefined) {
+        this._addAttributeWithRetry(key, value, 1, this);
     }
 }
 
-LocalRegistry.prototype._addAttributeWithRetry = function(key, value, binName, attemptNumber, self) {
-    lockFile.lock(binName, { stale: constants.localStorage.stale }, function (err) {
+LocalRegistry.prototype._addAttributeWithRetry = function(key, value, attemptNumber, self) {
+    lockFile.lock(this.binName, { stale: constants.localStorage.stale }, function (err) {
         if (err) {
-            setTimeout(self._addAttributeWithRetry, self._getWaitTime(attemptNumber), key, value, binName, attemptNumber+1, self);
+            setTimeout(self._addAttributeWithRetry, self._getWaitTime(attemptNumber), key, value, attemptNumber + 1, self);
             return;
         }
-        var nodes = JSON.parse(self.localStorage.getItem(binName));
+        var nodes = JSON.parse(self.localStorage.getItem(this.binName));
         nodes[self.id][key] = value;
-        self.localStorage.setItem(binName, JSON.stringify(nodes));
-        lockFile.unlockSync(binName);
+        self.localStorage.setItem(this.binName, JSON.stringify(nodes));
+        lockFile.unlockSync(this.binName);
+    });
+}
+
+LocalRegistry.prototype.removeAttribute = function(key) {
+    if (this.binName !== undefined) {
+        this._removeAttributeWithRetry(key, 1, this);
+    }
+}
+
+LocalRegistry.prototype._removeAttributeWithRetry = function(key, attemptNumber, self) {
+    lockFile.lock(this.binName, { stale: constants.localStorage.stale }, function (err) {
+        if (err) {
+            setTimeout(self._removeAttributeWithRetry, self._getWaitTime(attemptNumber), key, attemptNumber + 1, self);
+            return;
+        }
+        var nodes = JSON.parse(self.localStorage.getItem(this.binName));
+        delete nodes[self.id][key];
+        self.localStorage.setItem(this.binName, JSON.stringify(nodes));
+        lockFile.unlockSync(this.binName);
     });
 }
 
@@ -336,6 +343,17 @@ LocalRegistry.prototype._scan = function(self) {
      }
      return { newlyOnlineMachs: newlyOnlineMachs, newlyOfflineMachs: newlyOfflineMachs };
  }
+
+LocalRegistry.prototype._getBinName = function() {
+    var binNumber = hash(this.id);
+    if (this.machType === constants.globals.NodeType.FOG) {
+        return 'fogs_' + binNumber;
+    } else if (this.machType === constants.globals.NodeType.CLOUD) {
+        return 'clouds_' + binNumber;
+    } else {
+        return undefined;
+    }
+}
 
 /*
  * Hash a uuid into an integer in the range 0 to constants.localStorage.numBins-1

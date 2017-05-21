@@ -26,6 +26,20 @@ MDNSRegistry.prototype.register = function(channel) {
     this._createAdvertisement(channel, constants.mdns.retries);
 }
 
+MDNSRegistry.prototype.cancelRegistration = function(channel) {
+    var channelName = undefined;
+    if (channel === constants.globals.Channel.LOCAL) {
+        channelName = this.app + '-' + this.machType + '-' + 'local';
+    } else if (channel === constants.globals.Channel.DEFAULT) {
+        channelName = this.app + '-' + this.machType;
+    }
+    if (channelName !== undefined) {
+        if (this.ads[channelName] !== undefined) {
+            this.ads[channelName].stop();
+        }
+    }
+}
+
 /**
  * mDNS discovery is simply service browsing
  */
