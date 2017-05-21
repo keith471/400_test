@@ -1,10 +1,7 @@
 # TODO
 
-- handle mdns errors during setup differently than mdns errors when trying to use mdns as active protocol
-
 - detect when mqtt server goes down and respond to this
     - read documentation to determine how to detect when this occurs
-
 
 
 - add support for custom subscriptions

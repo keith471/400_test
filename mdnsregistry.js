@@ -22,8 +22,8 @@ MDNSRegistry.prototype = new Registry();
 /**
  * mDNS registration consists of advertisement creation
  */
-MDNSRegistry.prototype.register = function(channel) {
-    this._createAdvertisement(channel, constants.mdns.retries);
+MDNSRegistry.prototype.register = function(channel, context) {
+    this._createAdvertisement(channel, context, constants.mdns.retries);
 }
 
 MDNSRegistry.prototype.cancelRegistration = function(channel) {
@@ -77,7 +77,7 @@ MDNSRegistry.prototype.stopDiscovering = function(channel) {
 /**
  * Attempts to create an mDNS advertisement up to `retries` times
  */
-MDNSRegistry.prototype._createAdvertisement = function(channel, retries) {
+MDNSRegistry.prototype._createAdvertisement = function(channel, context, retries) {
     var channelName = null;
     if (channel === constants.globals.Channel.DEFAULT) {
         channelName = this.app + '-' + this.machType;
@@ -85,14 +85,14 @@ MDNSRegistry.prototype._createAdvertisement = function(channel, retries) {
         channelName = this.app + '-' + this.machType + '-' + 'local';
     }
     if (channelName !== null) {
-        this._createAdvertisementWithName(channelName, retries, this);
+        this._createAdvertisementWithName(channelName, context, retries, this);
     }
 }
 
-MDNSRegistry.prototype._createAdvertisementWithName = function(name, retries, self) {
+MDNSRegistry.prototype._createAdvertisementWithName = function(name, context, retries, self) {
     var ad = mdns.createAdvertisement(mdns.tcp(name), self.port, {name: self.id}, function(err, service) {
         if (err) {
-            self._handleError(err, ad, name, retries, self);
+            self._handleError(err, ad, name, retries, context, self);
         } else {
             console.log('created advertisement for ' + name);
             self.ads[name] = ad;
@@ -104,7 +104,7 @@ MDNSRegistry.prototype._createAdvertisementWithName = function(name, retries, se
 /**
  * helper function for handling advertisement errors
  */
-MDNSRegistry.prototype._handleError = function(err, ad, name, retries, self) {
+MDNSRegistry.prototype._handleError = function(err, ad, name, retries, context, self) {
     switch (err.errorCode) {
         // if the error is unknown, then the mdns daemon may currently be down,
         // so try again in some number of seconds
@@ -114,16 +114,16 @@ MDNSRegistry.prototype._handleError = function(err, ad, name, retries, self) {
                 logger.log.warning('Exhaused all advertisement retries.');
                 // make sure the add is stopped
                 ad.stop();
-                self.emit('mdns-ad-error', err);
+                self.emit('mdns-ad-error', context);
             } else {
-                setTimeout(self._createAdvertisementWithName, constants.mdns.retryInterval, name, retries - 1, self);
+                setTimeout(self._createAdvertisementWithName, constants.mdns.retryInterval, name, retries - 1, context, self);
             }
             break;
         default:
             logger.log.error('Unhandled service error: ' + err + '. Abandoning mDNS.');
             // make sure the add is stopped
             ad.stop();
-            self.emit('mdns-ad-error', err);
+            self.emit('mdns-ad-error', context);
     }
 }
 

@@ -102,11 +102,12 @@ function Registrar(app, machType, id, port) {
     });
 
     /* if mdns error, fall back on local storage */
-    this.mdnsRegistry.on('mdns-ad-error', function(err, context) {
+    this.mdnsRegistry.on('mdns-ad-error', function(context) {
         // mdns cleanup
         self.mdnsRegistry.quit();
-        console.log('mdns error - falling back on local storage');
-        self._registerAndDiscoverWithLocalStorage();
+        if (context === globals.Context.REGISTRATION) {
+            self._registerAndDiscoverWithLocalStorage();
+        }
     });
 
     /*
@@ -199,7 +200,7 @@ Registrar.prototype._registerAndDiscoverWithMDNS = function(self) {
     // stop discovery on the local channel
     self.mdnsRegistry.stopDiscovering(globals.Channel.LOCAL);
     // add a registration to the local channel
-    self.mdnsRegistry.register(globals.Channel.LOCAL);
+    self.mdnsRegistry.register(globals.Channel.LOCAL, globals.Context.REGISTRATION);
     // start discovery on the mdns default channel
     self.mdnsRegistry.discover(globals.Channel.DEFAULT);
 }
@@ -268,7 +269,7 @@ Registrar.prototype._reset = function(self) {
         // restart discovering on the local channel
         self.mdnsRegistry.discover(globals.Channel.LOCAL);
     } else if (self.activeProtocol === globals.Protocol.LOCALSTORAGE) {
-        self.mdnsRegistry.register(globals.Channel.DEFAULT);
+        self.mdnsRegistry.register(globals.Channel.DEFAULT, globals.Context.PROTOCOL_UPGRADE);
         self.mdnsRegistry.discover(globals.Channel.LOCAL);
         // stop advertising on the local channel
         self.localStorage.removeAttribute('local');
@@ -281,7 +282,7 @@ Registrar.prototype._reset = function(self) {
 
 Registrar.prototype._setUp = function() {
     // register with mDNS and local storage so that other nodes that fail to use MQTT can still discover this one
-    this.mdnsRegistry.register(globals.Channel.DEFAULT);
+    this.mdnsRegistry.register(globals.Channel.DEFAULT, globals.Context.REGISTRATION_SETUP);
     this.localRegistry.register();
     // discover nodes using mDNS and local storage
     this.mdnsRegistry.discover(globals.Channel.LOCAL);

@@ -22,8 +22,9 @@ module.exports = Object.freeze.({
             DEFAULT: 0,
             LOCAL: 1
         },
-        ContextReason: {
-            INITIAL_REGISTRATION: 'initial registration',
+        Context: {
+            REGISTRATION: 'regular old registration',
+            REGISTRATION_SETUP: 'registration setup',
             PROTOCOL_UPGRADE: 'protocol upgrade'
         },
         upgradeInterval: 600000 // 10 minutes
