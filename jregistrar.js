@@ -67,13 +67,27 @@ function Registrar(app, machType, id, port) {
         self._handleNodeDown(globals.NodeType.CLOUD, cloudId);
     });
 
+    this.mqttRegistry.on('mqtt-reg-success', function(context) {
+        if (context.reason === globals.ContextReason.PROTOCOL_UPGRADE) {
+            self.activeProtocol = globals.Protocol.MQTT;
+            // TODO cancel things regarding the active protocol in order to fully complete the transition to mqtt
+        }
+        // if this event is triggered for any other reason, then ignore it
+    });
+
     /* something went wrong with MQTT registration */
-    this.mqttRegistry.on('mqtt-reg-error', function() {
+    this.mqttRegistry.on('mqtt-reg-error', function(context) {
+        if (context.reason === globals.ContextReason.PROTOCOL_UPGRADE) {
+            if (self.activeProtocol === globals.Protocol.MDNS) {
+                return;
+            }
+        }
         // close the connection
         console.log('mqtt error - falling back on mdns');
         self.mqttRegistry.quit(function() {
-            // fall back on mDNS
-            self._registerAndDiscoverWithMDNS();
+            // after a certain amount of time, try MQTT again
+            setTimeout(self._upgradeProtocol, globals.upgradeInterval, self);
+            self._registerAndDiscoverWithMDNS(context);
         });
     });
 
@@ -102,7 +116,11 @@ function Registrar(app, machType, id, port) {
     });
 
     /* if mdns error, fall back on local storage */
-    this.mdnsRegistry.on('mdns-ad-error', function(err) {
+    this.mdnsRegistry.on('mdns-ad-error', function(err, context) {
+        if (context.reason === globals.ContextReason.PROTOCOL_UPGRADE) {
+            setTimeout(self._upgradeProtocol, globals.upgradeInterval, self);
+            return;
+        }
         console.log('mdns error - falling back on local storage');
         self._registerAndDiscoverWithLocalStorage();
     });
@@ -144,29 +162,33 @@ Registrar.prototype = new EventEmitter();
 Registrar.prototype.registerAndDiscover = function(startWith) {
     // register with mDNS and local storage so that other nodes that fail
     // to use MQTT can still discover this one
-    this.mdnsRegistry.register(globals.channels.DEFAULT);
+    this.mdnsRegistry.register(globals.Channel.DEFAULT);
     this.localRegistry.register();
     // discover nodes using mDNS and local storage
-    this.mdnsRegistry.discover(globals.channels.LOCAL);
+    this.mdnsRegistry.discover(globals.Channel.LOCAL);
     this.localRegistry.discover('local');
     // register and discover using mqtt
-    this._registerAndDiscoverWithMQTT();
+    this.activeProtocol = globals.Protocol.MQTT;
+    var context = {
+        reason: globals.ContextReason.INITIAL_REGISTRATION // the reason for the registration
+    };
+    this._registerAndDiscoverWithMQTT(context);
     /*
     switch(startWith) {
         case globals.protocols.MDNS:
             // basic MQTT set-up
-            this.mdnsRegistry.register([ globals.channels.DEFAULT ]);
+            this.mdnsRegistry.register([ globals.Channel.DEFAULT ]);
             this.localRegistry.register();
-            this.mdnsRegistry.discover([ globals.channels.MDNS_LOCAL ]);
+            this.mdnsRegistry.discover([ globals.Channel.MDNS_LOCAL ]);
             this.localRegistry.discover([ 'local' ]);
             // register and discover using mDNS
             this._registerAndDiscoverWithMDNS();
             break;
         case globals.protocols.LOCALSTORAGE:
             // basic MQTT set-up
-            this.mdnsRegistry.register([ globals.channels.DEFAULT ]);
+            this.mdnsRegistry.register([ globals.Channel.DEFAULT ]);
             this.localRegistry.register();
-            this.mdnsRegistry.discover([ globals.channels.MDNS_LOCAL ]);
+            this.mdnsRegistry.discover([ globals.Channel.MDNS_LOCAL ]);
             this.localRegistry.discover([ 'local' ]);
             // register and discover using local storage
             this._registerAndDiscoverWithLocalStorage();
@@ -174,13 +196,13 @@ Registrar.prototype.registerAndDiscover = function(startWith) {
         default:
             // register with mDNS and local storage so that other nodes that fail
             // to use MQTT can still discover this one
-            this.mdnsRegistry.register([ globals.channels.DEFAULT ]);
+            this.mdnsRegistry.register([ globals.Channel.DEFAULT ]);
             this.localRegistry.register();
             // discover nodes using mDNS and local storage
-            this.mdnsRegistry.discover([ globals.channels.MDNS_LOCAL ]);
+            this.mdnsRegistry.discover([ globals.Channel.MDNS_LOCAL ]);
             this.localRegistry.discover([ 'local' ]);
             // register and discover using mqtt
-            this._registerAndDiscoverWithMQTT();
+            this._registerAndDiscoverWithMQTT(context);
             break;
     }
     */
@@ -190,23 +212,30 @@ Registrar.prototype.registerAndDiscover = function(startWith) {
  * Attempts to handle registration with MQTT.
  * If this fails, we fall back on mDNS.
  */
-Registrar.prototype._registerAndDiscoverWithMQTT = function() {
+Registrar.prototype._registerAndDiscoverWithMQTT = function(context) {
     // initiate mqtt registration/discovery
-    this.mqttRegistry.registerAndDiscover();
+    this.mqttRegistry.registerAndDiscover(context);
 }
 
 /**
  * Attempts to register/discover with mDNS
  * If this fails, we fall back on local storage
  */
-Registrar.prototype._registerAndDiscoverWithMDNS = function() {
-    /* initiate mDNS registration/discovery */
-    // stop discovery on the local channel
-    this.mdnsRegistry.stopDiscovering(globals.channels.LOCAL);
-    // already registered to default channel, just need to register to local channel now
-    this.mdnsRegistry.register(globals.channels.LOCAL);
-    // start discovery on the mdns default channel
-    this.mdnsRegistry.discover(globals.channels.DEFAULT);
+Registrar.prototype._registerAndDiscoverWithMDNS = function(context) {
+    if (context.reason === globals.ContextReason.PROTOCOL_UPGRADE) {
+        // TODO
+        // try to register and discover with mdns, passing a context
+        // if it works, make necessary changes to the current protocol
+        // else, set a timeout for another procotol upgrade attempt
+    } else if (context.reason === globals.ContextReason.INITIAL_REGISTRATION) {
+        /* initiate mDNS registration/discovery */
+        // stop discovery on the local channel
+        this.mdnsRegistry.stopDiscovering(globals.Channel.LOCAL);
+        // already registered to default channel, just need to register to local channel now
+        this.mdnsRegistry.register(globals.Channel.LOCAL);
+        // start discovery on the mdns default channel
+        this.mdnsRegistry.discover(globals.Channel.DEFAULT);
+    }
 }
 
 /**
@@ -263,6 +292,18 @@ Registrar.prototype._handleNodeDown = function(machType, id) {
         }
     }
 }
+
+Registrar.prototype._upgradeProtocol = function (self) {
+    if (self.activeProtocol === globals.Protocol.MQTT) {
+        return;
+    }
+
+    // TODO pass a context, and that's it!
+    var context = {
+        reason: globals.ContextReason.PROTOCOL_UPGRADE
+    };
+    self._registerAndDiscoverWithMQTT(context);
+};
 
 /* exports */
 module.exports = Registrar;

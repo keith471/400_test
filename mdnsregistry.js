@@ -38,13 +38,13 @@ MDNSRegistry.prototype.discover = function(channel) {
  */
 MDNSRegistry.prototype.stopDiscovering = function(channel) {
     var channelName = undefined;
-    if (channel === constants.globals.channels.LOCAL) {
+    if (channel === constants.globals.Channel.LOCAL) {
         if (this.machType === constants.globals.NodeType.DEVICE) {
             channelName = this.app + '-' + constants.globals.NodeType.FOG + '-' + 'local';
         } else if (this.machType === constants.globals.NodeType.FOG) {
             channelName = this.app + '-' + constants.globals.NodeType.CLOUD + '-' + 'local';
         }
-    } else if (channel === constants.globals.channels.DEFAULT) {
+    } else if (channel === constants.globals.Channel.DEFAULT) {
         if (this.machType === constants.globals.NodeType.DEVICE) {
             channelName = this.app + '-' + constants.globals.NodeType.FOG;
         } else if (this.machType === constants.globals.NodeType.FOG) {
@@ -65,9 +65,9 @@ MDNSRegistry.prototype.stopDiscovering = function(channel) {
  */
 MDNSRegistry.prototype._createAdvertisement = function(channel, retries) {
     var channelName = null;
-    if (channel === constants.globals.channels.DEFAULT) {
+    if (channel === constants.globals.Channel.DEFAULT) {
         channelName = this.app + '-' + this.machType;
-    } else if (channel === constants.globals.channels.MDNS_LOCAL) {
+    } else if (channel === constants.globals.Channel.LOCAL) {
         channelName = this.app + '-' + this.machType + '-' + 'local';
     }
     if (channelName !== null) {
@@ -122,13 +122,13 @@ MDNSRegistry.prototype._handleError = function(err, ad, name, retries, self) {
  */
 MDNSRegistry.prototype._browse = function(channel) {
     var channelName = null;
-    if (channel === constants.globals.channels.DEFAULT) {
+    if (channel === constants.globals.Channel.DEFAULT) {
         if (this.machType === constants.globals.NodeType.DEVICE) {
             channelName = this.app + '-' + constants.globals.NodeType.FOG;
         } else if (this.machType === constants.globals.NodeType.FOG) {
             channelName = this.app + '-' + constants.globals.NodeType.CLOUD;
         }
-    } else if (channel === constants.globals.channels.MDNS_LOCAL) {
+    } else if (channel === constants.globals.Channel.LOCAL) {
         if (this.machType === constants.globals.NodeType.DEVICE) {
             channelName = this.app + '-' + constants.globals.NodeType.FOG + '-' + 'local';
         } else if (this.machType === constants.globals.NodeType.FOG) {

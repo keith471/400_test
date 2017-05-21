@@ -13,15 +13,20 @@ module.exports = Object.freeze.({
             OFFLINE: 'offline'
         },
         localhost: '127.0.0.1',
-        protocols: {
+        Protocol: {
             MQTT: 'mqtt',
             MDNS: 'mdns',
             LOCALSTORAGE: 'localStorage'
         },
-        channels: {
+        Channel: {
             DEFAULT: 0,
             LOCAL: 1
-        }
+        },
+        ContextReason: {
+            INITIAL_REGISTRATION: 'initial registration',
+            PROTOCOL_UPGRADE: 'protocol upgrade'
+        },
+        upgradeInterval: 600000 // 10 minutes
     },
 
     mqtt: {
@@ -35,7 +40,7 @@ module.exports = Object.freeze.({
     mdns: {
         retries: 5,
         retryInterval: 2000, // 2 seconds
-        ipCheckInterval: 120000 // 2 minutes (unlikely for IP on LAN to change)
+        ipCheckInterval: 120000, // 2 minutes (unlikely for IP on LAN to change)
     },
 
     localStorage: {
@@ -44,6 +49,6 @@ module.exports = Object.freeze.({
         queryRetries: 10,
         initLock: 'init.lock',
         stale: 1000, // 1 second
-        numBins: 10 // number of fog and cloud bins to use
+        numBins: 10, // number of fog and cloud bins to use
     }
 });
