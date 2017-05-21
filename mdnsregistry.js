@@ -225,5 +225,18 @@ MDNSRegistry.prototype._getIp = function(addresses) {
     return null;
 }
 
+/**
+ * mDNS cleanup
+ * stops all advertising and browsing
+ */
+MDNSRegistry.prototype.quit = function() {
+    for (var name in this.ads) {
+        this.ads[name].stop();
+    }
+    for (var name in this.browsers) {
+        this.browsers[name].stop();
+    }
+}
+
 /* exports */
 module.exports = MDNSRegistry;

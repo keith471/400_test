@@ -1,18 +1,6 @@
 # TODO
 
-- work 'context' into mqtt.registerAndDiscover and Registrar events
-- line 72
-- line 226
-- add support for protocol upgrades: nodes using local storage or mdns should occasionally try MQTT to see if it works all of a sudden, meaning they can then switch over to it
-    - using mdns?
-        - just try **registering** with MQTT
-        - if this fails, then stick with mDNS
-        - if this succeeds, then
-            - quit discovery with mDNS
-            - start discovery with MQTT
-- make sure that mdns quits advertising on local channel if mdns fails
-- make sure that mdns quits advertising on local channel if it upgrades to mqtt
-- make sure that mdns quits advertising on local channel if it upgrades
+- handle mdns errors during setup differently than mdns errors when trying to use mdns as active protocol
 
 - detect when mqtt server goes down and respond to this
     - read documentation to determine how to detect when this occurs

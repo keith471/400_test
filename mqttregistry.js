@@ -80,7 +80,7 @@ MQTTRegistry.prototype.addSub = function(topic, qos, emitTag) {
  * Takes as a parameter an optional callback which is called when the mqtt client has either successfully subscribed
  * and published to the broker, or if either the subscription or publication has failed
  */
-MQTTRegistry.prototype.registerAndDiscover = function(context) {
+MQTTRegistry.prototype.registerAndDiscover = function() {
     // create an mqtt client
     this.client = mqtt.connect(constants.mqtt.brokerUrl, this._getConnectionOptions(this.app, this.machType, this.id));
 
@@ -114,7 +114,7 @@ MQTTRegistry.prototype.registerAndDiscover = function(context) {
         subs[fogStatusTopic] = 1;
         subs[fogResolutionTopic] = 1;
 
-        this._initiateCommunicationWithBroker(subs, 0, context);
+        this._initiateCommunicationWithBroker(subs, 0);
     } else if (this.machType === constants.globals.NodeType.FOG) {
         /* initialize subs with default subscriptions */
         var cloudStatusTopic = this.app + '/announce/cloud/+/status';
@@ -158,7 +158,7 @@ MQTTRegistry.prototype.registerAndDiscover = function(context) {
         subs[cloudResolutionTopic] = 1;
         subs[queryTopic] = 1;
 
-        this._initiateCommunicationWithBroker(subs, 1, context);
+        this._initiateCommunicationWithBroker(subs, 1);
     } else {
         /* initialize subs with default subscriptions */
         var queryTopic = this.app + '/query/cloud/' + this.id + '/ipandport';
@@ -177,7 +177,7 @@ MQTTRegistry.prototype.registerAndDiscover = function(context) {
         // subscribe to queries to this cloud's status
         subs[queryTopic] = 1;
 
-        this._initiateCommunicationWithBroker(subs, 1, context);
+        this._initiateCommunicationWithBroker(subs, 1);
     }
 }
 
@@ -203,7 +203,7 @@ MQTTRegistry.prototype.quit = function(cb) {
 /**
  * A general helper for listening for events from the MQTT client
  */
-MQTTRegistry.prototype._initiateCommunicationWithBroker = function(subs, publicationQos, context) {
+MQTTRegistry.prototype._initiateCommunicationWithBroker = function(subs, publicationQos) {
     var self = this;
 
     /* connect event emitted on successful connection or reconnection */
@@ -212,19 +212,19 @@ MQTTRegistry.prototype._initiateCommunicationWithBroker = function(subs, publica
 
         // if first connection, then set up subscriptions
         if (!connack.sessionPresent) {
-            self._setUpSubscriptions(subs, constants.mqtt.retries, context, self, function(granted) {
+            self._setUpSubscriptions(subs, constants.mqtt.retries, self, function(granted) {
                 logger.log.info(self.machType + ' ' + self.id + ' subscribed to ' + JSON.stringify(granted));
                 // publish our presence on the network
-                self._publishPresenceOnNetwork(publicationQos, constants.mqtt.retries, context, self, function() {
+                self._publishPresenceOnNetwork(publicationQos, constants.mqtt.retries, self, function() {
                     logger.log.info(self.machType + ' ' + self.id + ' published its `online` status on the network');
-                    self.emit('mqtt-reg-success', context);
+                    self.emit('mqtt-reg-success');
                 });
             });
         } else {
             // immediately publish presence on network
-            self._publishPresenceOnNetwork(publicationQos, constants.mqtt.retries, context, self, function() {
+            self._publishPresenceOnNetwork(publicationQos, constants.mqtt.retries, self, function() {
                 logger.log.info(self.machType + ' ' + self.id + ' published its `online` status on the network');
-                self.emit('mqtt-reg-success', context);
+                self.emit('mqtt-reg-success');
             });
         }
     });
@@ -244,19 +244,19 @@ MQTTRegistry.prototype._initiateCommunicationWithBroker = function(subs, publica
 
     this.client.on('offline', function () {
         console.log('client offline');
-        self.emit('mqtt-reg-error', context);
+        self.emit('mqtt-reg-error');
     });
 
     this.client.on('error', function (error) {
         logger.log.error(error);
-        self.emit('mqtt-reg-error', context);
+        self.emit('mqtt-reg-error');
     });
 }
 
 /**
  * Helper for setting up subscriptions to the broker with retries
  */
-MQTTRegistry.prototype._setUpSubscriptions = function(subs, retries, context, self, cb) {
+MQTTRegistry.prototype._setUpSubscriptions = function(subs, retries, self, cb) {
     self.client.subscribe(subs, function (err, granted) {
         if (err) {
             logger.log.error(err);
@@ -264,9 +264,9 @@ MQTTRegistry.prototype._setUpSubscriptions = function(subs, retries, context, se
                 // an error here means the node has been unable to subscribe and will therefore
                 // be unresponsive to requests from other nodes. thus, it should NOT publish
                 // its presence on the network
-                self.emit('mqtt-reg-error', context);
+                self.emit('mqtt-reg-error');
             } else {
-                setTimeout(self._setUpSubscriptions, constants.mqtt.retryInterval, subs, retries - 1, context, self, cb);
+                setTimeout(self._setUpSubscriptions, constants.mqtt.retryInterval, subs, retries - 1, self, cb);
             }
         } else {
             cb(granted);
@@ -277,15 +277,15 @@ MQTTRegistry.prototype._setUpSubscriptions = function(subs, retries, context, se
 /**
  * Helper for publishing a node's presence on the network
  */
-MQTTRegistry.prototype._publishPresenceOnNetwork = function(publicationQos, retries, context, self, cb) {
+MQTTRegistry.prototype._publishPresenceOnNetwork = function(publicationQos, retries, self, cb) {
     self.client.publish(self.app + '/announce/' + self.machType + '/' + self.id + '/status', 'online', {qos: publicationQos, retain: true}, function (err) {
         if (err) {
             logger.log.error(err);
             if (retries === 0) {
                 // again, an error here means we should not use MQTT
-                self.emit('mqtt-reg-error', context);
+                self.emit('mqtt-reg-error');
             } else {
-                setTimeout(self._publishPresenceOnNetwork, constants.mqtt.retryInterval, publicationQos, retries - 1, context, self, cb);
+                setTimeout(self._publishPresenceOnNetwork, constants.mqtt.retryInterval, publicationQos, retries - 1, self, cb);
             }
         } else {
             cb();
