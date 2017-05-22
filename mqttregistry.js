@@ -234,6 +234,7 @@ MQTTRegistry.prototype._initiateCommunicationWithBroker = function(subs, publica
         self._handleMessage(topic, message);
     });
 
+    /*
     this.client.on('reconnect', function () {
         console.log('client reconnected')
     });
@@ -241,9 +242,9 @@ MQTTRegistry.prototype._initiateCommunicationWithBroker = function(subs, publica
     this.client.on('close', function () {
         console.log('client disconnected')
     });
+    */
 
     this.client.on('offline', function () {
-        console.log('client offline');
         self.emit('mqtt-reg-error');
     });
 
