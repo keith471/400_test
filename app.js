@@ -5,7 +5,7 @@ var Registrar = require('./jregistrar'),
     events = require('events');
 
 var machType = process.argv[2] == undefined ? globals.NodeType.DEVICE : process.argv[2],
-    protocol = process.argv[3] == undefined ? globals.protocols.MQTT : process.argv[3],
+    protocol = process.argv[3] == undefined ? globals.Protocol.MQTT : process.argv[3],
     app = process.argv[4] == undefined ? 'looooongAppName' : process.argv[3],
     id = process.argv[5] == undefined ? uuid() : process.argv[4],
     port = process.argv[6] == undefined ? 1337 : process.argv[5];
@@ -45,7 +45,7 @@ reggie.on('cloud-down', function(cloudId) {
     console.log('Cloud down: ' + cloudId);
 });
 
-reggie.registerAndDiscover(protocol);
+reggie.registerAndDiscover();
 
 /*
 function Test() {

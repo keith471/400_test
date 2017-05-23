@@ -1,6 +1,6 @@
 
 
-module.exports = Object.freeze.({
+module.exports = Object.freeze({
 
     globals: {
         NodeType: {
@@ -12,7 +12,6 @@ module.exports = Object.freeze.({
             ONLINE: 'online',
             OFFLINE: 'offline'
         },
-        localhost: '127.0.0.1',
         Protocol: {
             MQTT: 'mqtt',
             MDNS: 'mdns',
@@ -27,6 +26,7 @@ module.exports = Object.freeze.({
             REGISTRATION_SETUP: 'registration setup',
             PROTOCOL_UPGRADE: 'protocol upgrade'
         },
+        localhost: '127.0.0.1',
         upgradeInterval: 600000 // 10 minutes
     },
 

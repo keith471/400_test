@@ -144,7 +144,7 @@ Registrar.prototype = new EventEmitter();
  * If this fails, then it will fall back on mDNS.
  * If mDNS also fails, then it will fall back on local storage.
  */
-Registrar.prototype.registerAndDiscover = function(startWith) {
+Registrar.prototype.registerAndDiscover = function() {
     this._setUp();
     this._registerAndDiscoverWithMQTT(this);
     /*

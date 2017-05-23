@@ -94,7 +94,6 @@ MDNSRegistry.prototype._createAdvertisementWithName = function(name, context, re
         if (err) {
             self._handleError(err, ad, name, retries, context, self);
         } else {
-            console.log('created advertisement for ' + name);
             self.ads[name] = ad;
         }
     });
@@ -155,7 +154,6 @@ MDNSRegistry.prototype._browse = function(channel) {
 }
 
 MDNSRegistry.prototype._browseForChannelWithName = function(name) {
-    console.log('browsing for channel with name ' + name);
     // the serice a node browses for depends on the type of the node
     /* create the browser */
     var browser = mdns.createBrowser(mdns.tcp(name));

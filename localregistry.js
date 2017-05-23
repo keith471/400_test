@@ -227,22 +227,16 @@ LocalRegistry.prototype._removeAttributeWithRetry = function(key, attemptNumber,
  * Adds a node's information to local storage
  */
 LocalRegistry.prototype._addNodeToLocalStorage = function(data, attemptNumber, self, cb) {
-    var binName = undefined;
-    if (self.machType === constants.globals.NodeType.FOG) {
-        binName = 'fogs_' + self.bin;
-    } else if (self.machType === constants.globals.NodeType.CLOUD) {
-        binName = 'clouds_' + self.bin;
-    }
-    if (binName !== undefined) {
-        lockFile.lock(binName, { stale: constants.localStorage.stale }, function (err) {
+    if (self.binName !== undefined) {
+        lockFile.lock(this.binName, { stale: constants.localStorage.stale }, function (err) {
             if (err) {
-                setTimeout(self._addNodeToLocalStorage, self._getWaitTime(attemptNumber), data, attemptNumber+1, self, cb);
+                setTimeout(self._addNodeToLocalStorage, self._getWaitTime(attemptNumber), data, attemptNumber + 1, self, cb);
                 return;
             }
-            var nodes = JSON.parse(self.localStorage.getItem(binName));
+            var nodes = JSON.parse(self.localStorage.getItem(self.binName));
             nodes[self.id] = data;
-            self.localStorage.setItem(binName, JSON.stringify(nodes));
-            lockFile.unlockSync(binName);
+            self.localStorage.setItem(self.binName, JSON.stringify(nodes));
+            lockFile.unlockSync(self.binName);
             cb();
         });
     }
@@ -259,24 +253,16 @@ LocalRegistry.prototype._getWaitTime = function(attemptNumber) {
  * Update lastCheckIn field
  */
 LocalRegistry.prototype._checkIn = function(attemptNumber, self) {
-    var binName = undefined;
-    if (self.machType === constants.globals.NodeType.FOG) {
-        binName = 'fogs_' + self.bin;
-    } else if (self.machType === constants.globals.NodeType.CLOUD) {
-        binName = 'clouds_' + self.bin;
-    }
-    if (binName !== undefined) {
-        lockFile.lock(binName, { stale: constants.localStorage.stale }, function (err) {
-            if (err) {
-                setTimeout(self._checkIn, self._getWaitTime(attemptNumber), attemptNumber+1, self);
-                return;
-            }
-            var nodes = JSON.parse(self.localStorage.getItem(binName));
-            nodes[self.id].lastCheckIn = Date.now();
-            self.localStorage.setItem(binName, JSON.stringify(nodes));
-            lockFile.unlockSync(binName);
-        });
-    }
+    lockFile.lock(self.binName, { stale: constants.localStorage.stale }, function (err) {
+        if (err) {
+            setTimeout(self._checkIn, self._getWaitTime(attemptNumber), attemptNumber + 1, self);
+            return;
+        }
+        var nodes = JSON.parse(self.localStorage.getItem(self.binName));
+        nodes[self.id].lastCheckIn = Date.now();
+        self.localStorage.setItem(self.binName, JSON.stringify(nodes));
+        lockFile.unlockSync(self.binName);
+    });
 }
 
 /**
