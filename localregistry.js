@@ -139,7 +139,7 @@ LocalRegistry.prototype._register = function(self) {
 
     self._addNodeToLocalStorage(data, 1, self, function() {
         // check in every so often to indicate that we're still here
-        setInterval(self._checkIn, 1, self);
+        setInterval(self._checkIn, constants.localStorage.checkInInterval, 1, self);
     });
 }
 

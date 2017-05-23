@@ -27,7 +27,7 @@ module.exports = Object.freeze({
             PROTOCOL_UPGRADE: 'protocol upgrade'
         },
         localhost: '127.0.0.1',
-        upgradeInterval: 600000 // 10 minutes
+        upgradeInterval: 10000 // 30 seconds for testing; a better value is probably on the order of 3 minutes
     },
 
     mqtt: {

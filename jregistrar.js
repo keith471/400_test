@@ -83,22 +83,22 @@ function Registrar(app, machType, id, port) {
 
     /* triggered when a fog goes up */
     this.mdnsRegistry.on('mdns-fog-up', function(fog) {
-        self._handleNodeUp(globals.NodeType.FOG, fog);
+        self._handleNodeUp(globals.NodeType.FOG, fog, self);
     });
 
     /* triggered when a fog goes down */
     this.mdnsRegistry.on('mdns-fog-down', function(fogId) {
-        self._handleNodeDown(globals.NodeType.FOG, fogId);
+        self._handleNodeDown(globals.NodeType.FOG, fogId, self);
     });
 
     /* triggered when a cloud goes up */
     this.mdnsRegistry.on('mdns-cloud-up', function(cloud) {
-        self._handleNodeUp(globals.NodeType.CLOUD, cloud);
+        self._handleNodeUp(globals.NodeType.CLOUD, cloud, self);
     });
 
     /* triggered when a cloud goes down */
     this.mdnsRegistry.on('mdns-cloud-down', function(cloudId) {
-        self._handleNodeDown(globals.NodeType.CLOUD, cloudId);
+        self._handleNodeDown(globals.NodeType.CLOUD, cloudId, self);
     });
 
     /* if mdns error, fall back on local storage */
@@ -117,20 +117,20 @@ function Registrar(app, machType, id, port) {
     /* triggered when a fog (or fogs) updates the local storage */
     this.localRegistry.on('ls-fog-update', function(updates) {
         for (var i in updates.online) {
-            self._handleNodeUp(globals.NodeType.FOG, updates.online[i]);
+            self._handleNodeUp(globals.NodeType.FOG, updates.online[i], self);
         }
         for (var i in updates.offline) {
-            self._handleNodeDown(globals.NodeType.FOG, updates.offline[i]);
+            self._handleNodeDown(globals.NodeType.FOG, updates.offline[i], self);
         }
     });
 
     /* triggered when a cloud (or clouds) updates the local storage */
     this.localRegistry.on('ls-cloud-update', function(updates) {
         for (var i in updates.online) {
-            self._handleNodeUp(globals.NodeType.CLOUD, updates.online[i]);
+            self._handleNodeUp(globals.NodeType.CLOUD, updates.online[i], self);
         }
         for (var i in updates.offline) {
-            self._handleNodeDown(globals.NodeType.CLOUD, updates.offline[i]);
+            self._handleNodeDown(globals.NodeType.CLOUD, updates.offline[i], self);
         }
     });
 }
@@ -187,6 +187,7 @@ Registrar.prototype.registerAndDiscover = function() {
  * If this fails, we fall back on mDNS.
  */
 Registrar.prototype._registerAndDiscoverWithMQTT = function(self) {
+    console.log('active protocol: MQTT');
     this.activeProtocol = globals.Protocol.MQTT;
     self.mqttRegistry.registerAndDiscover();
 }
@@ -196,6 +197,7 @@ Registrar.prototype._registerAndDiscoverWithMQTT = function(self) {
  * If this fails, we fall back on local storage
  */
 Registrar.prototype._registerAndDiscoverWithMDNS = function(self) {
+    console.log('active protocol: mDNS');
     this.activeProtocol = globals.Protocol.MDNS;
     // stop discovery on the local channel
     self.mdnsRegistry.stopDiscovering(globals.Channel.LOCAL);
@@ -209,6 +211,7 @@ Registrar.prototype._registerAndDiscoverWithMDNS = function(self) {
  * Registration/discovery using local storage
  */
 Registrar.prototype._registerAndDiscoverWithLocalStorage = function() {
+    console.log('active protocol: local storage');
     this.activeProtocol = globals.Protocol.LOCALSTORAGE;
     // stop discovery on local channel
     this.localRegistry.stopDiscovering('local');
@@ -218,7 +221,7 @@ Registrar.prototype._registerAndDiscoverWithLocalStorage = function() {
     this.localRegistry.discover('default');
 }
 
-Registrar.prototype._handleNodeUp = function(machType, node) {
+Registrar.prototype._handleNodeUp = function(machType, node, self) {
     var shouldEmit = false;
     if (self.discoveries.hasOwnProperty(node.id)) {
         if (self.discoveries[node.id].status !== globals.Status.ONLINE) {
@@ -226,7 +229,7 @@ Registrar.prototype._handleNodeUp = function(machType, node) {
             shouldEmit = true;
         }
     } else {
-        self.discoveries[fog.id] = { status: globals.Status.ONLINE };
+        self.discoveries[node.id] = { status: globals.Status.ONLINE };
         shouldEmit = true;
     }
 
@@ -239,7 +242,7 @@ Registrar.prototype._handleNodeUp = function(machType, node) {
     }
 }
 
-Registrar.prototype._handleNodeDown = function(machType, id) {
+Registrar.prototype._handleNodeDown = function(machType, id, self) {
     var shouldEmit = false;
     if (self.discoveries.hasOwnProperty(id)) {
         if (self.discoveries[id].status !== globals.Status.OFFLINE) {
@@ -247,7 +250,7 @@ Registrar.prototype._handleNodeDown = function(machType, id) {
             shouldEmit = true;
         }
     } else {
-        self.discoveries[fogId] = { status: globals.Status.OFFLINE };
+        self.discoveries[id] = { status: globals.Status.OFFLINE };
         shouldEmit = true;
     }
 
