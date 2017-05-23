@@ -24,13 +24,16 @@ function Registrar(app, machType, id, port) {
 
     this.mqttRegistry.on('mqtt-fog-up', function(fogId) {
         if (self.discoveries.hasOwnProperty(fogId)) {
+            console.log('received mqtt-fog-up event for a known fog');
             if (self.discoveries[fogId].status !== globals.Status.ONLINE) {
+                console.log('our records show the fog\'s status is already online');
                 // status has changed
                 self.discoveries[fogId].status = globals.Status.ONLINE;
                 // query for the connection info of the fog
                 self.mqttRegistry.query(globals.NodeType.FOG, fogId);
             }
         } else {
+            console.log('recevied mqtt-fog-up event for a new fog');
             // brand new fog
             self.discoveries[fogId] = { status: globals.Status.ONLINE };
             self.mqttRegistry.query(globals.NodeType.FOG, fogId);
@@ -44,7 +47,7 @@ function Registrar(app, machType, id, port) {
     });
 
     this.mqttRegistry.on('mqtt-fog-down', function(fogId) {
-        self._handleNodeDown(globals.NodeType.FOG, fogId);
+        self._handleNodeDown(globals.NodeType.FOG, fogId, self);
     });
 
     this.mqttRegistry.on('mqtt-cloud-up', function(cloudId) {
@@ -88,6 +91,7 @@ function Registrar(app, machType, id, port) {
 
     /* triggered when a fog goes down */
     this.mdnsRegistry.on('mdns-fog-down', function(fogId) {
+        console.log('received mdns-fog-down event');
         self._handleNodeDown(globals.NodeType.FOG, fogId, self);
     });
 
@@ -271,6 +275,7 @@ Registrar.prototype._reset = function(self) {
         self.mdnsRegistry.stopDiscovering(globals.Channel.DEFAULT)
         // restart discovering on the local channel
         self.mdnsRegistry.discover(globals.Channel.LOCAL);
+        console.log('done resetting');
     } else if (self.activeProtocol === globals.Protocol.LOCALSTORAGE) {
         self.mdnsRegistry.register(globals.Channel.DEFAULT, globals.Context.PROTOCOL_UPGRADE);
         self.mdnsRegistry.discover(globals.Channel.LOCAL);
@@ -294,6 +299,7 @@ Registrar.prototype._setUp = function() {
 
 Registrar.prototype._upgradeProtocol = function (self) {
     self._reset(self);
+    console.log('trying mqtt again');
     self._registerAndDiscoverWithMQTT(self);
 };
 

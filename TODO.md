@@ -1,7 +1,8 @@
 # TODO
 
 - test
-    - merge
+    - fig bug 1
+- merge
 
 - create fresh branch
 - add support for custom subscriptions

@@ -212,6 +212,7 @@ MQTTRegistry.prototype._initiateCommunicationWithBroker = function(subs, publica
 
         // if first connection, then set up subscriptions
         if (!connack.sessionPresent) {
+            console.log('session NOT present');
             self._setUpSubscriptions(subs, constants.mqtt.retries, self, function(granted) {
                 logger.log.info(self.machType + ' ' + self.id + ' subscribed to ' + JSON.stringify(granted));
                 // publish our presence on the network
@@ -221,6 +222,7 @@ MQTTRegistry.prototype._initiateCommunicationWithBroker = function(subs, publica
                 });
             });
         } else {
+            console.log('session present');
             // immediately publish presence on network
             self._publishPresenceOnNetwork(publicationQos, constants.mqtt.retries, self, function() {
                 logger.log.info(self.machType + ' ' + self.id + ' published its `online` status on the network');
@@ -289,6 +291,7 @@ MQTTRegistry.prototype._publishPresenceOnNetwork = function(publicationQos, retr
                 setTimeout(self._publishPresenceOnNetwork, constants.mqtt.retryInterval, publicationQos, retries - 1, self, cb);
             }
         } else {
+            console.log('published online presence');
             cb();
         }
     });
