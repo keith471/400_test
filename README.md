@@ -2,7 +2,10 @@
 
 ## To Run
 Before running, you'll need to link the mdns module:
+macOS:
 `cd mdns && npm link`
+Ubuntu:
+`cd mdns && sudo npm link --unsafe-perm` (because Ubuntu sucks)
 Then,
 - optionally, start an MQTT server: `mosquitto`  
 - run a device with `npm start device`
