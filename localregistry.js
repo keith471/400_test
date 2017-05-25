@@ -3,7 +3,7 @@
 //==============================================================================
 
 var LocalStorage = require('node-localstorage').LocalStorage,
-    lockFile = require('lockFile'),
+    lockFile = require('lockfile'),
     constants = require('./constants'),
     logger = require('./jerrlog'),
     Registry = require('./registry'),
