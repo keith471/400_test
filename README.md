@@ -1,7 +1,10 @@
 # README
 
 ## To Run
-- if using MQTT, first start an MQTT server: `mosquitto`  
+Before running, you'll need to link the mdns module:
+`cd mdns && npm link`
+Then,
+- optionally, start an MQTT server: `mosquitto`  
 - run a device with `npm start device`
 - run a fog with `npm start fog`
 - run a cloud with `npm start cloud`
