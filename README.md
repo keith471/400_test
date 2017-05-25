@@ -1,7 +1,9 @@
 # README
 
 ## To Run
-Before running, you'll need to link the mdns module:
+If on Ubuntu, or other debianesque systems, you'll need to install `libavahi-compat-libdnssd-dev` for the mdns module to work:
+`sudo apt install libavahi-compat-libdnssd-dev`
+Then, you'll need to link the mdns module:
 macOS:
 `cd mdns && npm link`
 Ubuntu:
