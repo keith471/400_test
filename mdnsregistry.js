@@ -2,7 +2,7 @@
 // Registers a node on the local network using mDNS
 //==============================================================================
 
-var mdns = require('mdns'),
+var mdns = require('./mdns/lib/mdns'),
     constants = require('./constants'),
     logger = require('./jerrlog'),
     Registry = require('./registry');

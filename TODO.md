@@ -10,6 +10,7 @@
     - with local storage, you can get away with just scanning fogs or clouds if no custom attributes need to be discovered. But as soon as the node is interested in discovering custom attributes, then it will need to scan over ALL other nodes, regardless of device, fog, cloud distinction (UNLESS it is specified that the node is only interested in, say, DEVICE nodes with attribute DIMMABLE)
 
 ## Questions
+- how to set up a host to act as the mqtt broker, with the ability for connections to it to go down?
 
 ## MQTT
 - have nodes responding to queries respond only to the node that made the query, rather than broadcasting an announcement to anyone listening?
