@@ -50,7 +50,7 @@ MDNSRegistry.prototype.discover = function(channel) {
 /**
  * Quit browsing on the given channel
  */
-MDNSRegistry.prototype.stopDiscovering = function(channel) {
+MDNSRegistry.prototype.stopDiscovering = function(channel, silent) {
     var channelName = undefined;
     if (channel === constants.globals.Channel.LOCAL) {
         if (this.machType === constants.globals.NodeType.DEVICE) {

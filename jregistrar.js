@@ -24,18 +24,17 @@ function Registrar(app, machType, id, port) {
 
     this.mqttRegistry.on('mqtt-fog-up', function(fogId) {
         if (self.discoveries.hasOwnProperty(fogId)) {
-            console.log('received mqtt-fog-up event for a known fog');
+            self.discoveries[fogId].protocol = globals.Protocol.MQTT;
+            // avoid repeat discoveries
             if (self.discoveries[fogId].status !== globals.Status.ONLINE) {
-                console.log('our records show the fog\'s status is already online');
                 // status has changed
                 self.discoveries[fogId].status = globals.Status.ONLINE;
                 // query for the connection info of the fog
                 self.mqttRegistry.query(globals.NodeType.FOG, fogId);
             }
         } else {
-            console.log('recevied mqtt-fog-up event for a new fog');
             // brand new fog
-            self.discoveries[fogId] = { status: globals.Status.ONLINE };
+            self.discoveries[fogId] = { status: globals.Status.ONLINE, protocol: globals.Protocol.MQTT };
             self.mqttRegistry.query(globals.NodeType.FOG, fogId);
         }
     });
@@ -47,17 +46,19 @@ function Registrar(app, machType, id, port) {
     });
 
     this.mqttRegistry.on('mqtt-fog-down', function(fogId) {
-        self._handleNodeDown(globals.NodeType.FOG, fogId, self);
+        self._handleNodeDown(globals.Protocol.MQTT, globals.NodeType.FOG, fogId, self);
     });
 
     this.mqttRegistry.on('mqtt-cloud-up', function(cloudId) {
         if (self.discoveries.hasOwnProperty(cloudId)) {
+            self.discoveries[cloudId].protocol = globals.Protocol.MQTT;
+            // avoid repeat discoveries
             if (self.discoveries[cloudId].status !== globals.Status.ONLINE) {
                 self.discoveries[cloudId].status = globals.Status.ONLINE;
                 self.mqttRegistry.query(globals.NodeType.CLOUD, cloudId);
             }
         } else {
-            self.discoveries[cloudId] = { status: globals.Status.ONLINE };
+            self.discoveries[cloudId] = { status: globals.Status.ONLINE, protocol: globals.Protocol.MQTT };
             self.mqttRegistry.query(globals.NodeType.CLOUD, cloudId);
         }
     });
@@ -67,7 +68,7 @@ function Registrar(app, machType, id, port) {
     });
 
     this.mqttRegistry.on('mqtt-cloud-down', function(cloudId) {
-        self._handleNodeDown(globals.NodeType.CLOUD, cloudId);
+        self._handleNodeDown(globals.Protocol.MQTT, globals.NodeType.CLOUD, cloudId, self);
     });
 
     /* something went wrong with MQTT registration */
@@ -86,23 +87,23 @@ function Registrar(app, machType, id, port) {
 
     /* triggered when a fog goes up */
     this.mdnsRegistry.on('mdns-fog-up', function(fog) {
-        self._handleNodeUp(globals.NodeType.FOG, fog, self);
+        self._handleNodeUp(globals.Protocol.MDNS, globals.NodeType.FOG, fog, self);
     });
 
     /* triggered when a fog goes down */
     this.mdnsRegistry.on('mdns-fog-down', function(fogId) {
         console.log('received mdns-fog-down event');
-        self._handleNodeDown(globals.NodeType.FOG, fogId, self);
+        self._handleNodeDown(globals.Protocol.MDNS, globals.NodeType.FOG, fogId, self);
     });
 
     /* triggered when a cloud goes up */
     this.mdnsRegistry.on('mdns-cloud-up', function(cloud) {
-        self._handleNodeUp(globals.NodeType.CLOUD, cloud, self);
+        self._handleNodeUp(globals.Protocol.MDNS, globals.NodeType.CLOUD, cloud, self);
     });
 
     /* triggered when a cloud goes down */
     this.mdnsRegistry.on('mdns-cloud-down', function(cloudId) {
-        self._handleNodeDown(globals.NodeType.CLOUD, cloudId, self);
+        self._handleNodeDown(globals.Protocol.MDNS, globals.NodeType.CLOUD, cloudId, self);
     });
 
     /* if mdns error, fall back on local storage */
@@ -121,20 +122,20 @@ function Registrar(app, machType, id, port) {
     /* triggered when a fog (or fogs) updates the local storage */
     this.localRegistry.on('ls-fog-update', function(updates) {
         for (var i in updates.online) {
-            self._handleNodeUp(globals.NodeType.FOG, updates.online[i], self);
+            self._handleNodeUp(globals.Protocol.LOCALSTORAGE, globals.NodeType.FOG, updates.online[i], self);
         }
         for (var i in updates.offline) {
-            self._handleNodeDown(globals.NodeType.FOG, updates.offline[i], self);
+            self._handleNodeDown(globals.Protocol.LOCALSTORAGE, globals.NodeType.FOG, updates.offline[i], self);
         }
     });
 
     /* triggered when a cloud (or clouds) updates the local storage */
     this.localRegistry.on('ls-cloud-update', function(updates) {
         for (var i in updates.online) {
-            self._handleNodeUp(globals.NodeType.CLOUD, updates.online[i], self);
+            self._handleNodeUp(globals.Protocol.LOCALSTORAGE, globals.NodeType.CLOUD, updates.online[i], self);
         }
         for (var i in updates.offline) {
-            self._handleNodeDown(globals.NodeType.CLOUD, updates.offline[i], self);
+            self._handleNodeDown(globals.Protocol.LOCALSTORAGE, globals.NodeType.CLOUD, updates.offline[i], self);
         }
     });
 }
@@ -225,15 +226,17 @@ Registrar.prototype._registerAndDiscoverWithLocalStorage = function() {
     this.localRegistry.discover('default');
 }
 
-Registrar.prototype._handleNodeUp = function(machType, node, self) {
+Registrar.prototype._handleNodeUp = function(protocol, machType, node, self) {
     var shouldEmit = false;
     if (self.discoveries.hasOwnProperty(node.id)) {
+        self.discoveries[node.id].protocol = protocol;
+        // avoid repeat discoveries
         if (self.discoveries[node.id].status !== globals.Status.ONLINE) {
             self.discoveries[node.id].status = globals.Status.ONLINE;
             shouldEmit = true;
         }
     } else {
-        self.discoveries[node.id] = { status: globals.Status.ONLINE };
+        self.discoveries[node.id] = { status: globals.Status.ONLINE, protocol: protocol };
         shouldEmit = true;
     }
 
@@ -246,15 +249,17 @@ Registrar.prototype._handleNodeUp = function(machType, node, self) {
     }
 }
 
-Registrar.prototype._handleNodeDown = function(machType, id, self) {
+Registrar.prototype._handleNodeDown = function(protocol, machType, id, self) {
     var shouldEmit = false;
     if (self.discoveries.hasOwnProperty(id)) {
-        if (self.discoveries[id].status !== globals.Status.OFFLINE) {
-            self.discoveries[id].status = globals.Status.OFFLINE;
-            shouldEmit = true;
+        if (protocol === self.discoveries[id].protocol) {
+            if (self.discoveries[id].status !== globals.Status.OFFLINE) {
+                self.discoveries[id].status = globals.Status.OFFLINE;
+                shouldEmit = true;
+            }
         }
     } else {
-        self.discoveries[id] = { status: globals.Status.OFFLINE };
+        self.discoveries[id] = { status: globals.Status.OFFLINE, protocol: protocol };
         shouldEmit = true;
     }
 
@@ -272,10 +277,9 @@ Registrar.prototype._reset = function(self) {
         // stop advertising on the local channel
         self.mdnsRegistry.cancelRegistration(globals.Channel.LOCAL);
         // stop discovering on the default channel
-        self.mdnsRegistry.stopDiscovering(globals.Channel.DEFAULT)
+        self.mdnsRegistry.stopDiscovering(globals.Channel.DEFAULT);
         // restart discovering on the local channel
         self.mdnsRegistry.discover(globals.Channel.LOCAL);
-        console.log('done resetting');
     } else if (self.activeProtocol === globals.Protocol.LOCALSTORAGE) {
         self.mdnsRegistry.register(globals.Channel.DEFAULT, globals.Context.PROTOCOL_UPGRADE);
         self.mdnsRegistry.discover(globals.Channel.LOCAL);
@@ -299,9 +303,14 @@ Registrar.prototype._setUp = function() {
 
 Registrar.prototype._upgradeProtocol = function (self) {
     self._reset(self);
-    console.log('trying mqtt again');
     self._registerAndDiscoverWithMQTT(self);
 };
+
+Registrar.prototype._protocolGte = function(newP, oldP) {
+    return (newP === globals.Protocol.MQTT) ||
+        (newP === globals.Protocol.MDNS && (oldP === globals.Protocol.MDNS || oldP === globals.Protocol.LOCALSTORAGE)) ||
+        (newP === globals.Protocol.LOCALSTORAGE && oldP === globals.Protocol.LOCALSTORAGE);
+}
 
 /* exports */
 module.exports = Registrar;
