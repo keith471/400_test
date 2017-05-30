@@ -1,10 +1,5 @@
 # TODO
 
-- test
-    - fig bug 1
-- merge
-
-- create fresh branch
 - add support for custom subscriptions
     - nodes have _attributes_. _attributes_ are <key, value> pairs and are discoverable.
     - with local storage, you can get away with just scanning fogs or clouds if no custom attributes need to be discovered. But as soon as the node is interested in discovering custom attributes, then it will need to scan over ALL other nodes, regardless of device, fog, cloud distinction (UNLESS it is specified that the node is only interested in, say, DEVICE nodes with attribute DIMMABLE)
