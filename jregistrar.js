@@ -23,15 +23,13 @@ function Registrar(app, machType, id, port) {
      */
 
     this.mqttRegistry.on('mqtt-fog-up', function(fogId) {
-        if (self._handleNodeUp(globals.Protocol.MQTT, fogId, self)) {
-            self.mqttRegistry.query(globals.NodeType.FOG, fogId);
-        }
+        self.mqttRegistry.query(globals.NodeType.FOG, fogId);
     });
 
     this.mqttRegistry.on('mqtt-fog-ipandport', function(fog) {
-        // this will only be fired (eventually) if a query is made, and a query will be made only if a fog has gone from
-        // offline to online, and thus we can safely emit a 'fog-up' event without risk of emitting a repeat event
-        self.emit('fog-up', fog);
+        if (self._handleNodeUp(globals.Protocol.MQTT, fog.id, self)) {
+            self.emit('fog-up', fog);
+        }
     });
 
     this.mqttRegistry.on('mqtt-fog-down', function(fogId) {
@@ -74,6 +72,7 @@ function Registrar(app, machType, id, port) {
     /* triggered when a fog goes up */
     this.mdnsRegistry.on('mdns-fog-up', function(fog) {
         if (self._handleNodeUp(globals.Protocol.MDNS, fog.id, self)) {
+            console.log('mdns says fog up');
             self.emit('fog-up', fog);
         }
     });
@@ -117,6 +116,7 @@ function Registrar(app, machType, id, port) {
     this.localRegistry.on('ls-fog-update', function(updates) {
         for (var i in updates.online) {
             if (self._handleNodeUp(globals.Protocol.LOCALSTORAGE, updates.online[i].id, self)) {
+                console.log('local storage says fog up');
                 self.emit('fog-up', updates.online[i]);
             }
         }
@@ -182,9 +182,7 @@ Registrar.prototype._handleNodeUp = function(protocol, id, self) {
 
 Registrar.prototype._handleNodeDown = function(protocol, id, self) {
     if (self.discoveries.hasOwnProperty(id)) {
-        // if we receive an event indicating that a node is down on a given protocol, then we had better
-        // have the node currently recorded as up on the same protocol, otherwise we ignore
-        if (protocol === self.discoveries[id].protocol && self.discoveries[id].status !== globals.Status.OFFLINE) {
+        if (self.discoveries[id].status !== globals.Status.OFFLINE) {
             self.discoveries[id].status = globals.Status.OFFLINE;
             return true;
         }
