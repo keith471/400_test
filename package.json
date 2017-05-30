@@ -1,7 +1,7 @@
 {
-  "name": "node-localstorage-test",
+  "name": "jam-registration-and-discovery-test",
   "version": "1.0.0",
-  "description": "A playground for localstorage",
+  "description": "For testing registration/discovery in JAM",
   "main": "app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -10,7 +10,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "async": "^2.3.0",
     "bunyan": "^1.8.10",
     "lockfile": "^1.0.3",
     "mqtt": "^2.4.0",

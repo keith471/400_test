@@ -32,60 +32,16 @@ LocalRegistry.prototype = new Registry();
 /**
  * API for local storage registration/discovery
  */
-/*
 LocalRegistry.prototype.registerAndDiscover = function() {
-    // first step in registration is initializing the local storage
-    var self = this;
-    this._initLocalStorage(this, function() {
-        // initialization complete; begin actual registration/discovery
-        self._registerAndDiscover(self);
-    });
-}
-
-LocalRegistry.prototype._registerAndDiscover = function(self) {
-    // create an object to represent the machine
-    var now = Date.now();
-    var data = {
-        ip: self._getIPv4Address(),
-        port: self.port,
-        lastCheckIn: now,
-        createdAt: now,
-        updatedAt: now
-    };
-
-    if (self.machType === constants.globals.NodeType.DEVICE) {
-        // scan for fogs every so often
-        self._scanForFogs(self);
-        setInterval(self._scanForFogs, constants.localStorage.scanInterval, self);
-    } else if (self.machType === constants.globals.NodeType.FOG) {
-        self._addFog(data, self, function() {
-            // check in every so often to indicate that we're still here
-            setInterval(self._fogCheckIn, constants.localStorage.checkInInterval, self);
-        });
-        // scan for clouds every so often
-        self._scanForClouds(self);
-        setInterval(self._scanForClouds, constants.localStorage.scanInterval, self);
-    } else {
-        self._addCloud(data, self, function() {
-            // check in every so often to indicate that we're still here
-            setInterval(self._cloudCheckIn, constants.localStorage.checkInInterval, self);
-        });
-    }
-}
-*/
-
-/**
- * API for local storage registration
- */
-LocalRegistry.prototype.register = function() {
     // initialize the local storage
     var self = this;
     this._initLocalStorage(this, function() {
         // initialization complete; begin actual registration/discovery
         self._register(self);
+        self._discover(self);
+        self.emit('ls-reg-success');
     });
 }
-
 
 LocalRegistry.prototype._initLocalStorage = function(self, cb) {
     lockFile.lock(constants.localStorage.initLock, { stale: constants.localStorage.stale }, function (err) {
@@ -147,17 +103,22 @@ LocalRegistry.prototype._register = function(self) {
  * API for local storage discovery of nodes with the given key(s)
  */
 LocalRegistry.prototype.discover = function(keys) {
-    if (keys.constructor === Array) {
-        this.discoveryKeys = this.discoveryKeys.concat(keys);
-    } else {
-        this.discoveryKeys.push(keys);
-    }
-    if (!this.scanning) {
-        if (this.localStorage !== null) {
-            this._beginScanning(self);
+    this._discover(this, keys);
+}
+
+LocalRegistry.prototype._discover = function(self, keys) {
+    if (keys !== undefined) {
+        if (keys.constructor === Array) {
+            self.discoveryKeys = self.discoveryKeys.concat(keys);
         } else {
-            var self = this;
-            this.on('ls-initialized', function() {
+            self.discoveryKeys.push(keys);
+        }
+    }
+    if (!self.scanning) {
+        if (self.localStorage !== null) {
+            self._beginScanning(self);
+        } else {
+            self.on('ls-initialized', function() {
                 self._beginScanning(self);
             });
         }
@@ -173,7 +134,7 @@ LocalRegistry.prototype._beginScanning = function(self) {
         self._scan(self);
         setInterval(self._scan, constants.localStorage.scanInterval, self);
     } else {
-        // Nothing for now
+        // Nothing for now (clouds don't scan by default)
     }
     this.scanning = true;
 }
@@ -185,6 +146,10 @@ LocalRegistry.prototype.stopDiscovering = function(key) {
     }
 }
 
+/**
+ * Attributes are custom, discoverable features of nodes
+ * An attribute is discoverable by its `key`
+ */
 LocalRegistry.prototype.addAttribute = function(key, value) {
     if (this.binName !== undefined) {
         this._addAttributeWithRetry(key, value, 1, this);
@@ -298,33 +263,24 @@ LocalRegistry.prototype._scan = function(self) {
 
 /**
  * Helper function for finding newly online and offline nodes
+ * TODO: right now, this only gets online and offline nodes - does not factor in discoveryKeys
  */
  LocalRegistry.prototype._getUpdate = function(machs, self) {
      var newlyOnlineMachs = [];
      var newlyOfflineMachs = [];
      var now = Date.now();
      for (var machId in machs) {
-         var examineMach = false;
-         for (var i in self.discoveryKeys) {
-             if (machs[machId].hasOwnProperty(self.discoveryKeys[i])) {
-                 // this machine is relevant to us
-                 examineMach = true;
-                 break;
+         // first, check if the node has gone offline
+         if ((now - machs[machId].lastCheckIn) > 2 * constants.localStorage.checkInInterval) {
+             // if we haven't already noted that the machine is offline...
+             if (!self.currentOfflineMachs[machId]) {
+                 newlyOfflineMachs.push(machId);
+                 self.currentOfflineMachs[machId] = true;
              }
-         }
-         if (examineMach) {
-             // first, check if the node has gone offline
-             if ((now - machs[machId].lastCheckIn) > 2 * constants.localStorage.checkInInterval) {
-                 // if we haven't already noted that the machine is offline...
-                 if (!self.currentOfflineMachs[machId]) {
-                     newlyOfflineMachs.push(machId);
-                     self.currentOfflineMachs[machId] = true;
-                 }
-             } else if (machs[machId].updatedAt > self.lastScanAt) {
-                 newlyOnlineMachs.push({ id: machId, ip: machs[machId].ip, port: machs[machId].port });
-                 // in case we currently have this node recorded as offline
-                 delete self.currentOfflineMachs[machId];
-             }
+         } else if (machs[machId].updatedAt > self.lastScanAt) {
+             newlyOnlineMachs.push({ id: machId, ip: machs[machId].ip, port: machs[machId].port });
+             // in case we currently have this node recorded as offline
+             delete self.currentOfflineMachs[machId];
          }
      }
      return { newlyOnlineMachs: newlyOnlineMachs, newlyOfflineMachs: newlyOfflineMachs };

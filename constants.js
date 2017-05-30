@@ -13,21 +13,16 @@ module.exports = Object.freeze({
             OFFLINE: 'offline'
         },
         Protocol: {
-            MQTT: 'mqtt',
-            MDNS: 'mdns',
-            LOCALSTORAGE: 'localStorage'
+            MQTT: 2,
+            MDNS: 1,
+            LOCALSTORAGE: 0
         },
         Channel: {
             DEFAULT: 0,
             LOCAL: 1
         },
-        Context: {
-            REGISTRATION: 'regular old registration',
-            REGISTRATION_SETUP: 'registration setup',
-            PROTOCOL_UPGRADE: 'protocol upgrade'
-        },
         localhost: '127.0.0.1',
-        upgradeInterval: 10000 // 30 seconds for testing; a better value is probably on the order of 3 minutes
+        retryInterval: 10000 // 10 seconds for testing; a better value is probably on the order of a few minutes
     },
 
     mqtt: {
