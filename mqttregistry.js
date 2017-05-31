@@ -27,14 +27,6 @@ function MQTTRegistry(app, machType, id, port) {
      * }
      */
     this.subs = [];
-    // discoverable attributes of the node
-    this.attributes = {};
-    // attributes of other nodes that this node is discovering
-    this.discoveredAttributes = {
-        device: {},
-        fog: {},
-        cloud: {}
-    };
 }
 
 /* MQTTRegistry inherits from Registry */
@@ -401,29 +393,46 @@ MQTTRegistry.prototype.addAttributes = function(attrs) {
     // otherwise, we can simply wait and the attrs will be published next time the client
     // connects to the broker
     if (this.client.connected) {
-        // TODO publish the attributes
+        for (var key in attrs) {
+            this.client.publish(this.app + '/announce/' + this.machType + '/' + this.id + '/' + key, attrs[key], {qos: 1, retain: true}, function (err) {
+                if (err) {
+                    // TODO handle
+                    logger.log.error(err);
+                }
+            });
+        }
     }
 }
 
 MQTTRegistry.prototype.discoverAttributes = function(attrs) {
     // store the attributes on the node
+    var subs = {};
     for (var key in attrs.device) {
         this.discoveredAttributes.device[key] = attrs.device[key];
+        subs[this.app + '/announce/device/+/' + key] = 1;
     }
 
     for (var key in attrs.fog) {
-        this.discoverAttributes.fog[key] = attrs.fog[key];
+        this.discoveredAttributes.fog[key] = attrs.fog[key];
+        subs[this.app + '/announce/fog/+/' + key] = 1;
     }
 
     for (var key in attrs.cloud) {
         this.discoveredAttributes.cloud[key] = attrs.cloud[key];
+        subs[this.app + '/announce/cloud/+/' + key] = 1;
     }
 
     // if the client is currently connected to the broker, then subscribe to the attrs
     // otherwise, we can wait and we will subscribe to them next time the client connects to
     // the broker
     if (this.client.connected) {
-        // TODO subscribe to the attributes
+        this.client.subscribe(subs, function (err, granted) {
+            if (err) {
+                logger.log(err);
+                return;
+            }
+            logger.log(granted);
+        });
     }
 }
 
@@ -452,7 +461,6 @@ MQTTRegistry.prototype.discoverAttribute = function(topic, qos, emitTag) {
         exec: null
     });
 }
-
 
 /**
  * Closes the client, executing the callback upon completion

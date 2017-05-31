@@ -1,22 +1,22 @@
 # TODO
 
-**MQTTRegistry.prototype.addAttributes**
-- publish attributes
-**MQTTRegistry.prototype.discoverAttributes**
-- subscribe to the attributes
-
-**MQTTRegistry.prototype.registerAndDiscover**
+**MQTTRegistry**
+*registerAndDiscover*
 - pass publishable attributes as well as discoverable attributes as optional fields
+*general*
+- respond to having received a publication on a custom topic
 
-**MDNSRegistry.prototype.addAttributes**
+**MDNSRegistry**
+*addAttributes*
 - write function
-**MDNSRegistry.prototype.discoverAttributes**
+*discoverAttributes*
 - write function
 
-**LocalRegistry.prototype.addAttributes**
-- write function
-**LocalRegistry.prototype.discoverAttributes**
-- write function
+**LocalRegistry**
+*general*
+- adapt scanning so that it looks for custom attributes
+
+**Add support for removing attributes and ceasing to discover attributes**
 
 - add support for custom subscriptions
     - nodes have _attributes_. _attributes_ are <key, value> pairs and are discoverable.

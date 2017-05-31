@@ -144,6 +144,18 @@ function Registrar(app, machType, id, port) {
     this.localRegistry.on('ls-reg-success', function() {
         console.log('ls success');
     });
+
+    this.mqttRegistry.on('custom-discovery', function(emit, nodeId, value) {
+        self.emit(emit, nodeId, value);
+    });
+
+    this.mdnsRegistry.on('custom-discovery', function(emit, nodeId, value) {
+        self.emit(emit, nodeId, value);
+    });
+
+    this.localRegistry.on('custom-discovery', function(emit, nodeId, value) {
+        self.emit(emit, nodeId, value);
+    });
 }
 
 /* Registrar inherits from EventEmitter */

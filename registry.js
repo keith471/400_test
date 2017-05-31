@@ -9,6 +9,15 @@ var EventEmitter = require('events').EventEmitter,
 function Registry(ip, port) {
     this.ip = ip;
     this.port = port;
+
+    // discoverable attributes of the node
+    this.attributes = {};
+    // attributes of other nodes that this node is discovering
+    this.discoveredAttributes = {
+        device: {},
+        fog: {},
+        cloud: {}
+    };
 }
 
 /* Registry inherits from EventEmitter */

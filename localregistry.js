@@ -23,7 +23,6 @@ function LocalRegistry(app, machType, id, port) {
     this.appDir = os.homedir() + '/.' + app;
     this.lastScanAt = 0;
     this.currentOfflineMachs = {};
-    this.discoveryKeys = [];
 }
 
 /* LocalRegistry inherits from Registry */
@@ -99,21 +98,7 @@ LocalRegistry.prototype._register = function(self) {
     });
 }
 
-/**
- * API for local storage discovery of nodes with the given key(s)
- */
-LocalRegistry.prototype.discover = function(keys) {
-    this._discover(this, keys);
-}
-
-LocalRegistry.prototype._discover = function(self, keys) {
-    if (keys !== undefined) {
-        if (keys.constructor === Array) {
-            self.discoveryKeys = self.discoveryKeys.concat(keys);
-        } else {
-            self.discoveryKeys.push(keys);
-        }
-    }
+LocalRegistry.prototype._discover = function(self) {
     if (!self.scanning) {
         if (self.localStorage !== null) {
             self._beginScanning(self);
@@ -147,53 +132,11 @@ LocalRegistry.prototype.stopDiscovering = function(key) {
 }
 
 /**
- * Attributes are custom, discoverable features of nodes
- * An attribute is discoverable by its `key`
- */
-LocalRegistry.prototype.addAttribute = function(key, value) {
-    if (this.binName !== undefined) {
-        this._addAttributeWithRetry(key, value, 1, this);
-    }
-}
-
-LocalRegistry.prototype._addAttributeWithRetry = function(key, value, attemptNumber, self) {
-    lockFile.lock(this.binName, { stale: constants.localStorage.stale }, function (err) {
-        if (err) {
-            setTimeout(self._addAttributeWithRetry, self._getWaitTime(attemptNumber), key, value, attemptNumber + 1, self);
-            return;
-        }
-        var nodes = JSON.parse(self.localStorage.getItem(this.binName));
-        nodes[self.id][key] = value;
-        self.localStorage.setItem(this.binName, JSON.stringify(nodes));
-        lockFile.unlockSync(this.binName);
-    });
-}
-
-LocalRegistry.prototype.removeAttribute = function(key) {
-    if (this.binName !== undefined) {
-        this._removeAttributeWithRetry(key, 1, this);
-    }
-}
-
-LocalRegistry.prototype._removeAttributeWithRetry = function(key, attemptNumber, self) {
-    lockFile.lock(this.binName, { stale: constants.localStorage.stale }, function (err) {
-        if (err) {
-            setTimeout(self._removeAttributeWithRetry, self._getWaitTime(attemptNumber), key, attemptNumber + 1, self);
-            return;
-        }
-        var nodes = JSON.parse(self.localStorage.getItem(this.binName));
-        delete nodes[self.id][key];
-        self.localStorage.setItem(this.binName, JSON.stringify(nodes));
-        lockFile.unlockSync(this.binName);
-    });
-}
-
-/**
  * Adds a node's information to local storage
  */
 LocalRegistry.prototype._addNodeToLocalStorage = function(data, attemptNumber, self, cb) {
     if (self.binName !== undefined) {
-        lockFile.lock(this.binName, { stale: constants.localStorage.stale }, function (err) {
+        lockFile.lock(self.binName, { stale: constants.localStorage.stale }, function (err) {
             if (err) {
                 setTimeout(self._addNodeToLocalStorage, self._getWaitTime(attemptNumber), data, attemptNumber + 1, self, cb);
                 return;
@@ -287,32 +230,95 @@ LocalRegistry.prototype._scan = function(self) {
  }
 
 LocalRegistry.prototype._getBinName = function() {
-    var binNumber = hash(this.id);
+    var binNumber = this._hash(this.id);
     if (this.machType === constants.globals.NodeType.FOG) {
         return 'fogs_' + binNumber;
     } else if (this.machType === constants.globals.NodeType.CLOUD) {
         return 'clouds_' + binNumber;
     } else {
-        return undefined;
+        return 'devices_' + binNumber;
     }
 }
 
 /*
  * Hash a uuid into an integer in the range 0 to constants.localStorage.numBins-1
  */
-function hash(uuid) {
+LocalRegistry.prototype._hash = function(uuid) {
     var hash = 0, i, chr;
     if (uuid.length === 0) return hash;
     for (i = 0; i < uuid.length; i++) {
         chr = uuid.charCodeAt(i);
         hash = ((hash << 5) - hash) + chr;
-        hash |= 0; // Convert to 32bit integer
+        hash |= 0; // convert to a 32 bit integer
     }
     if (hash < 0) {
         hash += 1;
         hash *= -1;
     }
     return hash % constants.localStorage.numBins;
+}
+
+/**
+ * Add custom, disverable attributes on the node
+ */
+LocalRegistry.prototype.addAttributes = function(attrs) {
+    this._addAttributesWithRetry(attrs, 1, this);
+}
+
+LocalRegistry.prototype._addAttributesWithRetry = function(attrs, attemptNumber, self) {
+    lockFile.lock(this.binName, { stale: constants.localStorage.stale }, function (err) {
+        if (err) {
+            setTimeout(self._addAttributesWithRetry, self._getWaitTime(attemptNumber), attrs, attemptNumber + 1, self);
+            return;
+        }
+        var nodes = JSON.parse(self.localStorage.getItem(self.binName));
+        for (var key in attrs) {
+            nodes[self.id][key] = attrs[key];
+        }
+        self.localStorage.setItem(self.binName, JSON.stringify(nodes));
+        lockFile.unlockSync(self.binName);
+    });
+}
+
+/**
+ * Removes attrs, a list of attribute keys, from this node
+ */
+LocalRegistry.prototype.removeAttributes = function(attrs) {
+    this._removeAttributeWithRetry(attrs, 1, this);
+}
+
+LocalRegistry.prototype._removeAttributesWithRetry = function(attrs, attemptNumber, self) {
+    lockFile.lock(self.binName, { stale: constants.localStorage.stale }, function (err) {
+        if (err) {
+            setTimeout(self._removeAttributesWithRetry, self._getWaitTime(attemptNumber), attrs, attemptNumber + 1, self);
+            return;
+        }
+        var nodes = JSON.parse(self.localStorage.getItem(self.binName));
+        for (var i = 0; i < attrs.length; i++) {
+            delete nodes[self.id][attrs[i]];
+        }
+        self.localStorage.setItem(self.binName, JSON.stringify(nodes));
+        lockFile.unlockSync(self.binName);
+    });
+}
+
+/**
+ * Discover other nodes with the given attributes
+ * This function need only store the attributes on the node. The LocalRegistry will
+ * look for other nodes with these attributes the next time it scans local storage.
+ */
+LocalRegistry.prototype.discoverAttributes = function(attrs) {
+    for (var key in attrs.device) {
+        this.discoveredAttributes.device[key] = attrs.device[key];
+    }
+
+    for (var key in attrs.fog) {
+        this.discoveredAttributes.fog[key] = attrs.fog[key];
+    }
+
+    for (var key in attrs.cloud) {
+        this.discoveredAttributes.cloud[key] = attrs.cloud[key];
+    }
 }
 
 module.exports = LocalRegistry;
