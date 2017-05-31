@@ -27,54 +27,18 @@ function MQTTRegistry(app, machType, id, port) {
      * }
      */
     this.subs = [];
+    // discoverable attributes of the node
+    this.attributes = {};
+    // attributes of other nodes that this node is discovering
+    this.discoveredAttributes = {
+        device: {},
+        fog: {},
+        cloud: {}
+    };
 }
 
 /* MQTTRegistry inherits from Registry */
 MQTTRegistry.prototype = new Registry();
-
-// TODO: move this logic elsewhere. As of now, this function does nothing useful.
-// It may not even be needed, since if the IP of a node changes, then it will go offline
-// for a second (I think) and then come back online, which will trigger a disconnection and
-// reconnection as desired. The only real use for this function would be if it was possible
-// for the IP of a node to change without it losing connection to the broker, in which case
-// the broker would never report to anyone that something about this node has changed and so
-// anyone else with this node's IP will keep using the old IP with no luck.
-/*
-MQTTRegistry.prototype._update = function() {
-    var oldAddress = this.addr;
-    this.addr = this._getIPv4Address();
-    this.updatedAt = Date.now();
-    if (oldAddress !== this.addr) {
-        this.emit('address-changed', oldAddress, this.addr);
-    }
-}
-*/
-
-/**
- * Add a subscription. All custom subscriptions have tags: the name of the event
- * that will be emitted in association with the subscription
- */
-MQTTRegistry.prototype.addSub = function(topic, qos, emitTag) {
-    // check that the topic is valid
-    if (!regGen.isValidTopic(topic)) {
-        logger.log.info('User defined topic with invalid topic name: ' + topic);
-        throw new Error('invalid topic: ' + topic);
-    }
-
-    // check the validity of qos
-    if (qos < 0 || qos > 2) {
-        logger.log.info('User defined topic with invalid qos: ' + qos);
-        throw new Error('invalid qos: ' + qos);
-    }
-    this.subs.push({
-        isUserDefined: true,
-        topic: topic,
-        regex: regGen.getRegex(topic),
-        qos: qos,
-        emitTag: emitTag,
-        exec: null
-    });
-}
 
 /**
  * Takes as a parameter an optional callback which is called when the mqtt client has either successfully subscribed
@@ -191,13 +155,6 @@ MQTTRegistry.prototype.query = function(machType, machId) {
             logger.log.error(err);
         }
     });
-}
-
-/**
- * Closes the client, executing the callback upon completion
- */
-MQTTRegistry.prototype.quit = function(cb) {
-    this.client.end(false, cb);
 }
 
 /**
@@ -425,6 +382,83 @@ MQTTRegistry.prototype._getConnectionOptions = function(appName, machType, machI
         connectTimeout: constants.mqtt.connectionTimeout,
         will: will
     };
+}
+
+//==============================================================================
+// Custom attribute publication/discovery
+//==============================================================================
+
+/**
+ * Add and publish discoverable attributes for this node
+ */
+MQTTRegistry.prototype.addAttributes = function(attrs) {
+    // store the attrs on the node
+    for (var key in attrs) {
+        this.attributes[key] = attrs[key];
+    }
+
+    // if the client is currently connected to the broker, then publish the attrs
+    // otherwise, we can simply wait and the attrs will be published next time the client
+    // connects to the broker
+    if (this.client.connected) {
+        // TODO publish the attributes
+    }
+}
+
+MQTTRegistry.prototype.discoverAttributes = function(attrs) {
+    // store the attributes on the node
+    for (var key in attrs.device) {
+        this.discoveredAttributes.device[key] = attrs.device[key];
+    }
+
+    for (var key in attrs.fog) {
+        this.discoverAttributes.fog[key] = attrs.fog[key];
+    }
+
+    for (var key in attrs.cloud) {
+        this.discoveredAttributes.cloud[key] = attrs.cloud[key];
+    }
+
+    // if the client is currently connected to the broker, then subscribe to the attrs
+    // otherwise, we can wait and we will subscribe to them next time the client connects to
+    // the broker
+    if (this.client.connected) {
+        // TODO subscribe to the attributes
+    }
+}
+
+/**
+ * Add a subscription. All custom subscriptions have tags: the name of the event
+ * that will be emitted in association with the subscription
+ */
+MQTTRegistry.prototype.discoverAttribute = function(topic, qos, emitTag) {
+    // check that the topic is valid
+    if (!regGen.isValidTopic(topic)) {
+        logger.log.info('User defined topic with invalid topic name: ' + topic);
+        throw new Error('invalid topic: ' + topic);
+    }
+
+    // check the validity of qos
+    if (qos < 0 || qos > 2) {
+        logger.log.info('User defined topic with invalid qos: ' + qos);
+        throw new Error('invalid qos: ' + qos);
+    }
+    this.subs.push({
+        isUserDefined: true,
+        topic: topic,
+        regex: regGen.getRegex(topic),
+        qos: qos,
+        emitTag: emitTag,
+        exec: null
+    });
+}
+
+
+/**
+ * Closes the client, executing the callback upon completion
+ */
+MQTTRegistry.prototype.quit = function(cb) {
+    this.client.end(false, cb);
 }
 
 /* exports */

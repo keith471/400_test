@@ -203,5 +203,93 @@ Registrar.prototype._retry = function(self, protocol) {
     }
 }
 
+//==============================================================================
+// Custom registration and discovery
+//==============================================================================
+
+var reservedAttrs = ['status', 'ipandport'];
+/**
+ * Add a custom, discoverable attributes to this node
+ * attrs is an object of key value pairs
+ */
+Registrar.prototype.addAttributes = function(attrs) {
+    // error handling
+    if (typeof attrs !== 'object') {
+        throw new Error('attrs must be an object');
+    }
+    for (var i = 0; i < reservedAttrs.length; i++) {
+        if (attrs[reservedAttrs[i]] !== undefined) {
+            throw new Error('the attribute \'' + reservedAttrs[i] + '\' is reserved');
+        }
+    }
+    // add the attributes on each protocol
+    this.mqttRegistry.addAttributes(attrs);
+    this.mdnsRegistry.addAttributes(attrs);
+    this.localRegistry.addAttributes(attrs);
+}
+
+/**
+ * Specify attributes to be discovered
+ attrs can have one of the following forms:
+ (a)
+    {
+        all: {attr: event}, // discover these attributes for all nodes
+        device: {attr: event}, // discover these attributes just for devices
+        fog: {attr: event}, // discover these attributes just for fogs
+        cloud: {attr: event} // discover these attributes just for clouds
+    }
+ (b) As a shortcut for all, one can simply pass an object of <attr, event> pairs
+ */
+Registrar.prototype.discoverAttributes = function(attrs) {
+    // error handling
+    if (typeof attrs !== 'object') {
+        throw new Error('attrs must be an object');
+    }
+    // check that the attrs parameter is properly formed
+    var formedAttrs;
+    if (attrs.all === undefined &&
+        attrs.device === undefined &&
+        attrs.fog === undefined &&
+        attrs.cloud === undefined) {
+            this._checkForm(attrs);
+            formedAttrs = {
+                device: {},
+                fog: {},
+                cloud: {}
+            };
+            for (var key in attrs) {
+                formedAttrs.device[key] = attrs[key];
+                formedAttrs.fog[key] = attrs[key];
+                formedAttrs.cloud[key] = attrs[key];
+            }
+    } else {
+        this._checkForm(attrs.all);
+        this._checkForm(attrs.device);
+        this._checkForm(attrs.fog);
+        this._checkForm(attrs.cloud);
+        for (var key in attrs.all) {
+            attrs.device[key] = attrs.all[key];
+            attrs.fog[key] = attrs.all[key];
+            attrs.cloud[key] = attrs.all[key];
+        }
+        formedAttrs = attrs;
+    }
+    this.mqttRegistry.discoverAttributes(formedAttrs);
+    this.mdnsRegistry.discoverAttributes(formedAttrs);
+    this.localRegistry.discoverAttributes(formedAttrs);
+}
+
+/**
+ * A helper for Registrar.prototype.discoverAttributes;
+ * ensures that attrs is an object of <string, string> pairs
+ */
+Registrar.prototype._checkForm = function(attrs) {
+    for (var key in attrs) {
+        if (typeof attrs[key] != 'string') {
+            throw new Error('the event name\'' + attrs[key] + '\' must be a string')
+        }
+    }
+}
+
 /* exports */
 module.exports = Registrar;

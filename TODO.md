@@ -1,5 +1,23 @@
 # TODO
 
+**MQTTRegistry.prototype.addAttributes**
+- publish attributes
+**MQTTRegistry.prototype.discoverAttributes**
+- subscribe to the attributes
+
+**MQTTRegistry.prototype.registerAndDiscover**
+- pass publishable attributes as well as discoverable attributes as optional fields
+
+**MDNSRegistry.prototype.addAttributes**
+- write function
+**MDNSRegistry.prototype.discoverAttributes**
+- write function
+
+**LocalRegistry.prototype.addAttributes**
+- write function
+**LocalRegistry.prototype.discoverAttributes**
+- write function
+
 - add support for custom subscriptions
     - nodes have _attributes_. _attributes_ are <key, value> pairs and are discoverable.
     - with local storage, you can get away with just scanning fogs or clouds if no custom attributes need to be discovered. But as soon as the node is interested in discovering custom attributes, then it will need to scan over ALL other nodes, regardless of device, fog, cloud distinction (UNLESS it is specified that the node is only interested in, say, DEVICE nodes with attribute DIMMABLE)
