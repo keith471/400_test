@@ -57,15 +57,11 @@ function Registrar(app, machType, id, port) {
         }
     });
 
-    this.mqttRegistry.on('mqtt-reg-error', function() {
+    this.mqttRegistry.on('mqtt-error', function() {
         // mqtt cleanup
         self.mqttRegistry.quit(function() {
             setTimeout(self._retry, globals.retryInterval, self, globals.Protocol.MQTT);
         });
-    });
-
-    this.mqttRegistry.on('mqtt-reg-success', function() {
-        console.log('mqtt success');
     });
 
     /*

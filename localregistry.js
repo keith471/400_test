@@ -309,15 +309,15 @@ LocalRegistry.prototype._removeAttributesWithRetry = function(attrs, attemptNumb
  */
 LocalRegistry.prototype.discoverAttributes = function(attrs) {
     for (var key in attrs.device) {
-        this.discoveredAttributes.device[key] = attrs.device[key];
+        this.discoverAttributes.device[key] = attrs.device[key];
     }
 
     for (var key in attrs.fog) {
-        this.discoveredAttributes.fog[key] = attrs.fog[key];
+        this.discoverAttributes.fog[key] = attrs.fog[key];
     }
 
     for (var key in attrs.cloud) {
-        this.discoveredAttributes.cloud[key] = attrs.cloud[key];
+        this.discoverAttributes.cloud[key] = attrs.cloud[key];
     }
 }
 

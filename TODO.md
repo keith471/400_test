@@ -1,13 +1,10 @@
 # TODO
 
-**MQTTRegistry**
+**LocalRegistry**
 *registerAndDiscover*
 - take options field
-    - continue working options in the two locations indicated on note paper (line 50)
 *general*
-- you might now be able to subscribe to ipandport announcements from nodes, but you'd have to explicitly query for them!
-    - idea: perhaps we allow for nodes to add and discover attributes that are queryable, rather than just announceable
-    - another idea: just add event mqtt-device-up to Registrar with logic to query for ip/port if user decides they ever want the info
+- adapt scanning so that it looks for custom attributes
 
 **MDNSRegistry**
 *registerAndDiscover*
@@ -17,17 +14,20 @@
 *discoverAttributes*
 - write function
 
-**LocalRegistry**
-*registerAndDiscover*
-- take options field
+**MQTTRegistry**
 *general*
-- adapt scanning so that it looks for custom attributes
+- you might now be able to subscribe to ipandport announcements from nodes, but you'd have to explicitly query for them!
+    - I think I need to wait until done with working custom discoveries into mdns and local storage to decide the best way to handle this across the board.
+    - idea: perhaps we allow for nodes to add and discover attributes that are queryable, rather than just announceable
+    - another idea: just add event mqtt-device-up to Registrar with logic to query for ip/port if user decides they ever want the info
 
 **Add support for removing attributes and ceasing to discover attributes**
 
 - add support for custom subscriptions
     - nodes have _attributes_. _attributes_ are <key, value> pairs and are discoverable.
     - with local storage, you can get away with just scanning fogs or clouds if no custom attributes need to be discovered. But as soon as the node is interested in discovering custom attributes, then it will need to scan over ALL other nodes, regardless of device, fog, cloud distinction (UNLESS it is specified that the node is only interested in, say, DEVICE nodes with attribute DIMMABLE)
+
+- Contact mDNS guy regarding 15 character service type limitation
 
 ## Questions
 - how to set up a host to act as the mqtt broker, with the ability for connections to it to go down?
