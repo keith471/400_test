@@ -2,17 +2,24 @@
 
 **MQTTRegistry**
 *registerAndDiscover*
-- pass publishable attributes as well as discoverable attributes as optional fields
+- take options field
+    - continue working options in the two locations indicated on note paper (line 50)
 *general*
-- respond to having received a publication on a custom topic
+- you might now be able to subscribe to ipandport announcements from nodes, but you'd have to explicitly query for them!
+    - idea: perhaps we allow for nodes to add and discover attributes that are queryable, rather than just announceable
+    - another idea: just add event mqtt-device-up to Registrar with logic to query for ip/port if user decides they ever want the info
 
 **MDNSRegistry**
+*registerAndDiscover*
+- take options field
 *addAttributes*
 - write function
 *discoverAttributes*
 - write function
 
 **LocalRegistry**
+*registerAndDiscover*
+- take options field
 *general*
 - adapt scanning so that it looks for custom attributes
 

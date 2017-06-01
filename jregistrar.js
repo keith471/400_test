@@ -13,6 +13,9 @@ function Registrar(app, machType, id, port) {
     this.mdnsRegistry = new MDNSRegistry(app, machType, id, port);
     this.localRegistry = new LocalRegistry(app, machType, id, port);
 
+    // reserved attributes
+    this.reservedAttrs = ['status', 'ipandport'];
+
     // map of id to information discovered about the node
     this.discoveries = {};
 
@@ -166,11 +169,24 @@ Registrar.prototype = new EventEmitter();
  * A node will always attempt to register using MQTT first.
  * If this fails, then it will fall back on mDNS.
  * If mDNS also fails, then it will fall back on local storage.
+ * options - an optional parameter
+ * options include:
+ *   attributes: key/value pair as in addAttributes
+ *   discoverAttributes: as in discoverAttributes
  */
-Registrar.prototype.registerAndDiscover = function() {
-    this.mqttRegistry.registerAndDiscover();
-    this.mdnsRegistry.registerAndDiscover();
-    this.localRegistry.registerAndDiscover();
+Registrar.prototype.registerAndDiscover = function(options) {
+    if (options !== undefined) {
+        if (options.attributes !== undefined) {
+            this._checkAttributes(options.attributes);
+        }
+
+        if (options.discoverAttributes !== undefined) {
+            options.discoverAttributes = this._checkAndReformatDiscoverAttributes(options.discoverAttributes);
+        }
+    }
+    this.mqttRegistry.registerAndDiscover(options);
+    this.mdnsRegistry.registerAndDiscover(options);
+    this.localRegistry.registerAndDiscover(options);
 }
 
 Registrar.prototype._handleNodeUp = function(protocol, id, self) {
@@ -219,21 +235,13 @@ Registrar.prototype._retry = function(self, protocol) {
 // Custom registration and discovery
 //==============================================================================
 
-var reservedAttrs = ['status', 'ipandport'];
 /**
  * Add a custom, discoverable attributes to this node
  * attrs is an object of key value pairs
  */
 Registrar.prototype.addAttributes = function(attrs) {
     // error handling
-    if (typeof attrs !== 'object') {
-        throw new Error('attrs must be an object');
-    }
-    for (var i = 0; i < reservedAttrs.length; i++) {
-        if (attrs[reservedAttrs[i]] !== undefined) {
-            throw new Error('the attribute \'' + reservedAttrs[i] + '\' is reserved');
-        }
-    }
+    this._checkAttributes(attrs);
     // add the attributes on each protocol
     this.mqttRegistry.addAttributes(attrs);
     this.mdnsRegistry.addAttributes(attrs);
@@ -253,6 +261,13 @@ Registrar.prototype.addAttributes = function(attrs) {
  (b) As a shortcut for all, one can simply pass an object of <attr, event> pairs
  */
 Registrar.prototype.discoverAttributes = function(attrs) {
+    attrs = this._checkAndReformatDiscoverAttributes(attrs);
+    this.mqttRegistry.discoverAttributes(formedAttrs);
+    this.mdnsRegistry.discoverAttributes(formedAttrs);
+    this.localRegistry.discoverAttributes(formedAttrs);
+}
+
+Registrar.prototype._checkAndReformatDiscoverAttributes = function(attrs) {
     // error handling
     if (typeof attrs !== 'object') {
         throw new Error('attrs must be an object');
@@ -286,9 +301,7 @@ Registrar.prototype.discoverAttributes = function(attrs) {
         }
         formedAttrs = attrs;
     }
-    this.mqttRegistry.discoverAttributes(formedAttrs);
-    this.mdnsRegistry.discoverAttributes(formedAttrs);
-    this.localRegistry.discoverAttributes(formedAttrs);
+    return formedAttrs;
 }
 
 /**
@@ -299,6 +312,17 @@ Registrar.prototype._checkForm = function(attrs) {
     for (var key in attrs) {
         if (typeof attrs[key] != 'string') {
             throw new Error('the event name\'' + attrs[key] + '\' must be a string')
+        }
+    }
+}
+
+Registrar.prototype._checkAttributes = function(attrs) {
+    if (typeof attrs !== 'object') {
+        throw new Error('attrs must be an object');
+    }
+    for (var i = 0; i < this.reservedAttrs.length; i++) {
+        if (attrs[this.reservedAttrs[i]] !== undefined) {
+            throw new Error('the attribute \'' + this.reservedAttrs[i] + '\' is reserved');
         }
     }
 }
