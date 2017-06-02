@@ -1,10 +1,20 @@
 # TODO
 
+**Improve structure**
+- there's really no need for `custom-discovery` vs. other discovery-related events (e.g. `mqtt-fog-up`)
+- there should be a single discovery event, `discovery`, that all Registries call for any discovery.
+- the parameters to the function called upon receipt of the event should be:
+    - emit: the name of the event to emit to the application (e.g. a built-in event, such as `fog-up`, or a user-specifed event such as `thermostat`)
+    - nodeId: the id of the node whose attribute was discovered
+    - value: the value associated with the attribute
+        - this should be anything that is JSON.parsable (i.e. any basic value, array, or object)
+        - the value can also be null
+        - the value is always the JSON.parsed message associated with the discovery:
+            - the mqtt message
+            - the mdns JSON.stringified `name` field that can be passed when creating an advertisement
+            - the local storage value of the <attr, value> pair
+
 **LocalRegistry**
-*registerAndDiscover*
-- take options field
-*general*
-- adapt scanning so that it looks for custom attributes
 
 **MDNSRegistry**
 *registerAndDiscover*
@@ -21,7 +31,11 @@
     - idea: perhaps we allow for nodes to add and discover attributes that are queryable, rather than just announceable
     - another idea: just add event mqtt-device-up to Registrar with logic to query for ip/port if user decides they ever want the info
 
+**Registrar**
+- update ls-fog/cloud-update to be ls-fog/cloud-up/down events
+
 **Add support for removing attributes and ceasing to discover attributes**
+**Check that we're no longer ignoring devices for things such as local storage checkin**
 
 - add support for custom subscriptions
     - nodes have _attributes_. _attributes_ are <key, value> pairs and are discoverable.

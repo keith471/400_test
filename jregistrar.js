@@ -14,7 +14,7 @@ function Registrar(app, machType, id, port) {
     this.localRegistry = new LocalRegistry(app, machType, id, port);
 
     // reserved attributes
-    this.reservedAttrs = ['status', 'ipandport'];
+    this.reservedAttrs = ['status', 'ipandport', 'ip', 'port', 'lastCheckIn', 'createdAt'];
 
     // map of id to information discovered about the node
     this.discoveries = {};
@@ -140,10 +140,6 @@ function Registrar(app, machType, id, port) {
         }
     });
 
-    this.localRegistry.on('ls-reg-success', function() {
-        console.log('ls success');
-    });
-
     this.mqttRegistry.on('custom-discovery', function(emit, nodeId, value) {
         self.emit(emit, nodeId, value);
     });
@@ -172,6 +168,10 @@ Registrar.prototype = new EventEmitter();
  */
 Registrar.prototype.registerAndDiscover = function(options) {
     if (options !== undefined) {
+        if (typeof options !== 'object') {
+            throw Error('options must be an object; see the docs');
+        }
+
         if (options.attributes !== undefined) {
             this._checkAttributes(options.attributes);
         }

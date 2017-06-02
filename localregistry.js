@@ -21,8 +21,14 @@ function LocalRegistry(app, machType, id, port) {
     this.binName = this._getBinName();
     // put the 'app' as a hidden directory in user's home
     this.appDir = os.homedir() + '/.' + app;
+    // the timestamp when we last scanned local storage for other nodes;
+    // set to zero to catch nodes that started before this node
     this.lastScanAt = 0;
     this.currentOfflineMachs = {};
+    // list of attributes to be removed the next time we checkin
+    this.attrsToRemove = [];
+    // boolean to keep track of whether register and discover has already been called
+    this.registerAndDiscoverCalled = false;
 }
 
 /* LocalRegistry inherits from Registry */
@@ -30,15 +36,49 @@ LocalRegistry.prototype = new Registry();
 
 /**
  * API for local storage registration/discovery
+ * This function should only ever be called once
  */
-LocalRegistry.prototype.registerAndDiscover = function() {
+LocalRegistry.prototype.registerAndDiscover = function(options) {
+
+    if (registerAndDiscoverCalled) {
+        return;
+    }
+    registerAndDiscoverCalled = true;
+
+    if (options !== undefined) {
+        // parse options
+        // attributes
+        for (var key in options.attributes) {
+            this.attributes[key] = options.attributes[key];
+        }
+
+        // discoverAttributes
+        for (var key in options.discoverAttributes.device) {
+            this.discoverAttributes.device[key] = options.discoverAttributes.device[key];
+        }
+
+        for (var key in options.discoverAttributes.fog) {
+            this.discoverAttributes.fog[key] = options.discoverAttributes.fog[key];
+        }
+
+        for (var key in options.discoverAttributes.cloud) {
+            this.discoverAttributes.cloud[key] = options.discoverAttributes.cloud[key];
+        }
+    }
+
+    // add default discoverAttributes: devices discover fogs and fogs discover clouds
+    if (this.machType === constants.globals.NodeType.DEVICE) {
+        this.discoverAttributes.fog.status = null;
+    } else if (this.machType === constants.globals.NodeType.FOG) {
+        this.discoverAttributes.cloud.status = null;
+    }
+
     // initialize the local storage
     var self = this;
     this._initLocalStorage(this, function() {
         // initialization complete; begin actual registration/discovery
         self._register(self);
         self._discover(self);
-        self.emit('ls-reg-success');
     });
 }
 
@@ -66,6 +106,7 @@ LocalRegistry.prototype._initLocalStorage = function(self, cb) {
         if (!self.localStorage.getItem('initialized')) {
             // we need to perform the initialization
             for (var i = 0; i < constants.localStorage.numBins; i++) {
+                self.localStorage.setItem('devices_' + i, '{}');
                 self.localStorage.setItem('fogs_' + i, '{}');
                 self.localStorage.setItem('clouds_' + i, '{}');
             }
@@ -87,9 +128,7 @@ LocalRegistry.prototype._register = function(self) {
         ip: self._getIPv4Address(),
         port: self.port,
         lastCheckIn: now,
-        createdAt: now,
-        updatedAt: now,
-        default: true
+        createdAt: now
     };
 
     self._addNodeToLocalStorage(data, 1, self, function() {
@@ -112,15 +151,10 @@ LocalRegistry.prototype._discover = function(self) {
 
 /**
  * Kick-start scanning
- * TODO: this will have to be changed when we add custom discoveries
  */
 LocalRegistry.prototype._beginScanning = function(self) {
-    if (self.machType === constants.globals.NodeType.DEVICE || self.machType === constants.globals.NodeType.FOG) {
-        self._scan(self);
-        setInterval(self._scan, constants.localStorage.scanInterval, self);
-    } else {
-        // Nothing for now (clouds don't scan by default)
-    }
+    self._scan(self);
+    setInterval(self._scan, constants.localStorage.scanInterval, self);
     this.scanning = true;
 }
 
@@ -159,6 +193,7 @@ LocalRegistry.prototype._getWaitTime = function(attemptNumber) {
 
 /**
  * Update lastCheckIn field
+ * Also, at this time, we update the attributes of the node
  */
 LocalRegistry.prototype._checkIn = function(attemptNumber, self) {
     lockFile.lock(self.binName, { stale: constants.localStorage.stale }, function (err) {
@@ -167,40 +202,121 @@ LocalRegistry.prototype._checkIn = function(attemptNumber, self) {
             return;
         }
         var nodes = JSON.parse(self.localStorage.getItem(self.binName));
+        // update lastCheckIn field
         nodes[self.id].lastCheckIn = Date.now();
+        // update attributes
+        // remove any that need removing
+        for (var i = 0; i < self.attrsToRemove.length; i++) {
+            delete nodes[self.id][self.attrsToRemove[i]];
+        }
+        // reset attrsToRemove
+        self.attrsToRemove = [];
+        // add any that need adding
+        for (var key in self.attributes) {
+            nodes[self.id][key] = self.attributes[key];
+        }
+        // reset attributes - unlike with the other protocols, it is safe to remove these once we've added them
+        self.attributes = {};
         self.localStorage.setItem(self.binName, JSON.stringify(nodes));
         lockFile.unlockSync(self.binName);
     });
 }
 
 /**
- * Scans local storage for newly online/offline nodes every x seconds
+ * Scans local storage for other nodes
  */
 LocalRegistry.prototype._scan = function(self) {
     var binName;
     var baseName;
-    if (self.machType === constants.globals.NodeType.DEVICE) {
+    var machs;
+
+    if (Object.keys(self.discoverAttributes.device).length !== 0) {
+        baseName = 'devices_';
+        for (var i = 0; i < constants.localStorage.numBins; i++) {
+            binName = baseName + i;
+            machs = JSON.parse(self.localStorage.getItem(binName));
+            self._makeDiscoveries(machs, constants.globals.NodeType.DEVICE);
+        }
+    }
+
+    if (Object.keys(self.discoverAttributes.fog).length !== 0) {
         baseName = 'fogs_';
-    } else if (self.machType === constants.globals.NodeType.FOG){
+        for (var i = 0; i < constants.localStorage.numBins; i++) {
+            binName = baseName + i;
+            machs = JSON.parse(self.localStorage.getItem(binName));
+            self._makeDiscoveries(machs, constants.globals.NodeType.FOG);
+        }
+    }
+
+    if (Object.keys(self.discoverAttributes.cloud).length !== 0) {
         baseName = 'clouds_';
+        for (var i = 0; i < constants.localStorage.numBins; i++) {
+            binName = baseName + i;
+            machs = JSON.parse(self.localStorage.getItem(binName));
+            self._makeDiscoveries(machs, constants.globals.NodeType.CLOUD);
+        }
     }
-    var nodes;
-    var updates;
-    var newlyOnlineNodes = [];
-    var newlyOfflineNodes = [];
-    for (var i = 0; i < constants.localStorage.numBins; i++) {
-        binName = baseName + i;
-        nodes = JSON.parse(self.localStorage.getItem(binName));
-        updates = self._getUpdate(nodes, self);
-        newlyOnlineNodes = newlyOnlineNodes.concat(updates.newlyOnlineMachs);
-        newlyOfflineNodes = newlyOfflineNodes.concat(updates.newlyOfflineMachs);
-    }
-    self.lastScanAt = Date.now();
-    var results = { online: newlyOnlineNodes, offline: newlyOfflineNodes };
-    if (self.machType === constants.globals.NodeType.DEVICE) {
-        self.emit('ls-fog-update', results);
-    } else if (self.machType === constants.globals.NodeType.FOG){
-        self.emit('ls-cloud-update', results);
+}
+
+LocalRegistry.prototype._makeDiscoveries = function(machs, typeOfMachBeingScanned) {
+    // only the machs that are newly online are of interest to us, unless we are interested in node status,
+    // in which case newly offline nodes are also of interest
+    var now = Date.now();
+    for (var machId in machs) {
+
+        for (var key in self.discoverAttributes.device) {
+
+            if (key === 'status') {
+                // check if the node has gone offline
+                if ((now - machs[machId].lastCheckIn) > 2 * constants.localStorage.checkInInterval) {
+                    // if we haven't already noted that the machine is offline...
+                    if (!self.currentOfflineMachs[machId]) {
+                        self.currentOfflineMachs[machId] = true;
+                        if (self.machType === constants.globals.NodeType.DEVICE) {
+                            if (typeOfMachBeingScanned !== constants.globals.NodeType.FOG) {
+                                self.emit('custom-discovery', self.discoverAttributes[typeOfMachBeingScanned].status, machId, 'offline');
+                            } else {
+                                self.emit('ls-fog-down', machId);
+                            }
+                        } else if (self.machType === constants.globals.NodeType.FOG) {
+                            if (typeOfMachBeingScanned !== constants.globals.NodeType.CLOUD) {
+                                self.emit('custom-discovery', self.discoverAttributes[typeOfMachBeingScanned].status, machId, 'offline');
+                            } else {
+                                self.emit('ls-cloud-down', machId);
+                            }
+                        } else {
+                            self.emit('custom-discovery', self.discoverAttributes[typeOfMachBeingScanned].status, machId, 'offline');
+                        }
+                    }
+                } else if (machs[machId].createdAt > self.lastScanAt) {
+                    // the node is newly online (or was online before the current node went online)
+                    // TODO: why not also pass the ip and port onto the user? (in the case of custom discoveries)
+                    if (self.machType === constants.globals.NodeType.DEVICE) {
+                        if (typeOfMachBeingScanned !== constants.globals.NodeType.FOG) {
+                            self.emit('custom-discovery', self.discoverAttributes[typeOfMachBeingScanned].status, machId, 'online');
+                        } else {
+                            self.emit('ls-fog-up', { id: machId, ip: machs[machId].ip, port: machs[machId].port });
+                        }
+                    } else if (self.machType === constants.globals.NodeType.FOG) {
+                        if (typeOfMachBeingScanned !== constants.globals.NodeType.CLOUD) {
+                            self.emit('custom-discovery', self.discoverAttributes[typeOfMachBeingScanned].status, machId, 'online');
+                        } else {
+                            self.emit('ls-cloud-up', { id: machId, ip: machs[machId].ip, port: machs[machId].port });
+                        }
+                    } else {
+                        self.emit('custom-discovery', self.discoverAttributes[typeOfMachBeingScanned].status, machId, 'online');
+                    }
+                    // in case we currently have this node recorded as offline
+                    delete self.currentOfflineMachs[machId];
+                }
+            } else {
+                if (machs[machId].createdAt > self.lastScanAt) {
+                    if (machs[machId].hasOwnProperty(key)) {
+                        self.emit('custom-discovery', self.discoverAttributes[typeOfMachBeingScanned][key], machId, machs[machId][key]);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -220,7 +336,7 @@ LocalRegistry.prototype._scan = function(self) {
                  newlyOfflineMachs.push(machId);
                  self.currentOfflineMachs[machId] = true;
              }
-         } else if (machs[machId].updatedAt > self.lastScanAt) {
+         } else if (machs[machId].createdAt > self.lastScanAt) {
              newlyOnlineMachs.push({ id: machId, ip: machs[machId].ip, port: machs[machId].port });
              // in case we currently have this node recorded as offline
              delete self.currentOfflineMachs[machId];
@@ -259,10 +375,13 @@ LocalRegistry.prototype._hash = function(uuid) {
 }
 
 /**
- * Add custom, disverable attributes on the node
+ * Add custom, discoverable attributes on the node
  */
 LocalRegistry.prototype.addAttributes = function(attrs) {
-    this._addAttributesWithRetry(attrs, 1, this);
+    for (var key in attrs) {
+        this.attributes[key] = attrs[key];
+    }
+    //this._addAttributesWithRetry(attrs, 1, this);
 }
 
 LocalRegistry.prototype._addAttributesWithRetry = function(attrs, attemptNumber, self) {
@@ -284,7 +403,11 @@ LocalRegistry.prototype._addAttributesWithRetry = function(attrs, attemptNumber,
  * Removes attrs, a list of attribute keys, from this node
  */
 LocalRegistry.prototype.removeAttributes = function(attrs) {
-    this._removeAttributeWithRetry(attrs, 1, this);
+    this.attrsToRemove = this.attrsToRemove.concat(attrs);
+    for (var i = 0; i < attrs.length; i++) {
+        delete this.attributes[attrs[i]];
+    }
+    // this._removeAttributeWithRetry(attrs, 1, this);
 }
 
 LocalRegistry.prototype._removeAttributesWithRetry = function(attrs, attemptNumber, self) {
