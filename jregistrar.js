@@ -4,6 +4,78 @@ var EventEmitter = require('events'),
     MDNSRegistry = require('./mdnsregistry'),
     LocalRegistry = require('./localregistry');
 
+//==============================================================================
+// Helpers
+//==============================================================================
+
+/**
+ * Returns true if two values are equivalent and false otherwise
+ */
+function equivalentValues(a, b) {
+    // base cases
+    if ((typeof a == 'number' && typeof b == 'number') ||
+        (typeof a == 'string' && typeof b == 'string')) {
+            return a == b;
+    }
+
+    if ((a == null && b == null) ||
+        (a == undefined && b == undefined)) {
+            return true;
+        }
+    }
+
+    if (a instanceof Array && b instanceof Array) {
+        // recursive case 1
+        return equivalentArrays(a, b);
+    } else if (a instanceof Object && b instanceof Object) {
+        // recursive case 2
+        return equivalentObjects(a, b);
+    }
+
+    return false;
+}
+
+/**
+ * Returns true if two arrays are equivalent or false otherwise
+ * Note: Currently returns false for two arrays with the same elements but in a different order
+ */
+function equivalentArrays(a, b) {
+    if (a.length != b.length) {
+        return false;
+    }
+
+    for (var i = 0; i < a.length; i++) {
+        if (!equivalentValues(a[i], b[i])) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Returns true if two objects are equivalent and false otherwise
+ */
+function equivalentObjects(a, b) {
+    if (Object.keys(a).length != Object.keys(b).length) {
+        return false;
+    }
+
+    for (var key in a) {
+        if (!b.hasOwnProperty(key) || !equivalentValues(a[key], b[key])) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+//==============================================================================
+// Registrar Class
+// This Class is the interface between the application and the MQTT, mDNS, and
+// local storage registries
+//==============================================================================
+
 function Registrar(app, machType, id, port) {
     this.app = app;
     this.machType = machType;
@@ -21,140 +93,70 @@ function Registrar(app, machType, id, port) {
 
     var self = this;
 
-    /*
-     * MQTT events
-     */
-
-    this.mqttRegistry.on('mqtt-fog-up', function(fogId) {
-        self.mqttRegistry.query(globals.NodeType.FOG, fogId);
-    });
-
-    this.mqttRegistry.on('mqtt-fog-ipandport', function(fog) {
-        if (self._handleNodeUp(globals.Protocol.MQTT, fog.id, self)) {
-            self.emit('fog-up', fog);
-        }
-    });
-
-    this.mqttRegistry.on('mqtt-fog-down', function(fogId) {
-        if (self._handleNodeDown(globals.Protocol.MQTT, fogId, self)) {
-            self.emit('fog-down', fogId);
-        }
-    });
-
-    this.mqttRegistry.on('mqtt-cloud-up', function(cloudId) {
-        if (self._handleNodeUp(globals.Protocol.MQTT, cloudId, self)) {
-            self.mqttRegistry.query(globals.NodeType.CLOUD, cloudId);
-        }
-    });
-
-    this.mqttRegistry.on('mqtt-cloud-ipandport', function(cloud) {
-        self.emit('cloud-up', cloud);
-    });
-
-    this.mqttRegistry.on('mqtt-cloud-down', function(cloudId) {
-        if (self._handleNodeDown(globals.Protocol.MQTT, cloudId, self)) {
-            self.emit('cloud-down', cloudId);
-        }
-    });
-
-    this.mqttRegistry.on('mqtt-error', function() {
+    this.mqttRegistry.on('error', function() {
         // mqtt cleanup
         self.mqttRegistry.quit(function() {
             setTimeout(self._retry, globals.retryInterval, self, globals.Protocol.MQTT);
         });
     });
 
-    /*
-     * mDNS events
-     */
-
-    /* triggered when a fog goes up */
-    this.mdnsRegistry.on('mdns-fog-up', function(fog) {
-        if (self._handleNodeUp(globals.Protocol.MDNS, fog.id, self)) {
-            console.log('mdns says fog up');
-            self.emit('fog-up', fog);
-        }
-    });
-
-    /* triggered when a fog goes down */
-    this.mdnsRegistry.on('mdns-fog-down', function(fogId) {
-        if (self._handleNodeDown(globals.Protocol.MDNS, fogId, self)) {
-            self.emit('fog-down', fogId);
-        }
-    });
-
-    /* triggered when a cloud goes up */
-    this.mdnsRegistry.on('mdns-cloud-up', function(cloud) {
-        if (self._handleNodeUp(globals.Protocol.MDNS, cloud.id, self)) {
-            self.emit('cloud-up', cloud);
-        }
-    });
-
-    /* triggered when a cloud goes down */
-    this.mdnsRegistry.on('mdns-cloud-down', function(cloudId) {
-        if (self._handleNodeDown(globals.Protocol.MDNS, cloudId, self)) {
-            self.emit('cloud-down', cloudId);
-        }
-    });
-
-    this.mdnsRegistry.on('mdns-ad-error', function() {
+    this.mdnsRegistry.on('error', function() {
         // mdns cleanup
         self.mdnsRegistry.quit();
         setTimeout(self._retry, globals.retryInterval, self, globals.Protocol.MDNS);
     });
 
-    this.mdnsRegistry.on('mdns-ad-success', function() {
+    this.mdnsRegistry.on('ad-success', function() {
         console.log('mdns success');
     });
 
-    /*
-     * Local storage events
-     */
-
-    /* triggered when a fog (or fogs) updates the local storage */
-    this.localRegistry.on('ls-fog-update', function(updates) {
-        for (var i in updates.online) {
-            if (self._handleNodeUp(globals.Protocol.LOCALSTORAGE, updates.online[i].id, self)) {
-                console.log('local storage says fog up');
-                self.emit('fog-up', updates.online[i]);
-            }
-        }
-        for (var i in updates.offline) {
-            if (self._handleNodeDown(globals.Protocol.LOCALSTORAGE, updates.offline[i], self)) {
-                self.emit('fog-down', updates.offline[i]);
-            }
+    this.mqttRegistry.on('discovery', function(emit, nodeId, value) {
+        if (!self._isDuplicate(self, emit, nodeId, value)) {
+            self._updateDiscoveries(self, emit, nodeId, value);
+            self.emit(emit, nodeId, value);
         }
     });
 
-    /* triggered when a cloud (or clouds) updates the local storage */
-    this.localRegistry.on('ls-cloud-update', function(updates) {
-        for (var i in updates.online) {
-            if (self._handleNodeUp(globals.Protocol.LOCALSTORAGE, updates.online[i].id, self)) {
-                self.emit('cloud-up', updates.online[i]);
-            }
-        }
-        for (var i in updates.offline) {
-            if (self._handleNodeDown(globals.Protocol.LOCALSTORAGE, updates.offline[i], self)) {
-                self.emit('cloud-down', updates.offline[i]);
-            }
+    this.mdnsRegistry.on('discovery', function(emit, nodeId, value) {
+        if (!self._isDuplicate(self, emit, nodeId, value)) {
+            self._updateDiscoveries(self, emit, nodeId, value);
+            self.emit(emit, nodeId, value);
         }
     });
 
-    this.mqttRegistry.on('custom-discovery', function(emit, nodeId, value) {
-        self.emit(emit, nodeId, value);
-    });
-
-    this.mdnsRegistry.on('custom-discovery', function(emit, nodeId, value) {
-        self.emit(emit, nodeId, value);
-    });
-
-    this.localRegistry.on('custom-discovery', function(emit, nodeId, value) {
-        self.emit(emit, nodeId, value);
+    this.localRegistry.on('discovery', function(emit, nodeId, value) {
+        if (!self._isDuplicate(self, emit, nodeId, value)) {
+            self._updateDiscoveries(self, emit, nodeId, value);
+            self.emit(emit, nodeId, value);
+        }
     });
 }
 
 /* Registrar inherits from EventEmitter */
 Registrar.prototype = new EventEmitter();
+
+/**
+ * Returns true if a discovery is a duplicate and false otherwise
+ */
+Registrar.prototype._isDuplicate = function(self, emit, nodeId, value) {
+    if (!self.discoveries.hasOwnProperty(emit)) {
+        return false;
+    }
+
+    if (!self.discoveries[emit].hasOwnProperty(nodeId)) {
+        return false;
+    }
+
+    // compare the values
+    return equivalentValues(value, self.discoveries[emit][nodeId]);
+}
+
+Registrar.prototype._updateDiscoveries = function(self, emit, nodeId, value) {
+    if (!self.discoveries.hasOwnProperty(emit)) {
+        self.discoveries[emit] = {};
+    }
+    self.discoveries[emit][nodeId] = value;
+}
 
 /**
  * Register a node on the network, and discover other nodes.
@@ -185,38 +187,6 @@ Registrar.prototype.registerAndDiscover = function(options) {
     this.localRegistry.registerAndDiscover(options);
 }
 
-Registrar.prototype._handleNodeUp = function(protocol, id, self) {
-    if (self.discoveries.hasOwnProperty(id)) {
-        // avoid repeat discoveries
-        if (self.discoveries[id].status !== globals.Status.ONLINE) {
-            self.discoveries[id].status = globals.Status.ONLINE;
-            self.discoveries[id].protocol = protocol;
-            return true;
-        } else if (protocol > self.discoveries[id].protocol) {
-            // could already be online but according to a lower protocol
-            // we want to update the protocol we have recorded for this node
-            self.discoveries[id].protocol = protocol;
-        }
-    } else {
-        self.discoveries[id] = { status: globals.Status.ONLINE, protocol: protocol };
-        return true;
-    }
-    return false;
-}
-
-Registrar.prototype._handleNodeDown = function(protocol, id, self) {
-    if (self.discoveries.hasOwnProperty(id)) {
-        if (self.discoveries[id].status !== globals.Status.OFFLINE) {
-            self.discoveries[id].status = globals.Status.OFFLINE;
-            return true;
-        }
-    } else {
-        self.discoveries[id] = { status: globals.Status.OFFLINE, protocol: protocol };
-        return true;
-    }
-    return false;
-}
-
 Registrar.prototype._retry = function(self, protocol) {
     if (protocol === globals.Protocol.MQTT) {
         console.log('retrying mqtt');
@@ -232,7 +202,7 @@ Registrar.prototype._retry = function(self, protocol) {
 //==============================================================================
 
 /**
- * Add a custom, discoverable attributes to this node
+ * Add custom, discoverable attributes to this node
  * attrs is an object of key value pairs
  */
 Registrar.prototype.addAttributes = function(attrs) {

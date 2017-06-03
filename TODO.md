@@ -1,5 +1,7 @@
 # TODO
 
+Next: Adapt MQTT, mDNS, and Local Storage to the simplified and uniform form described below
+
 **Improve structure**
 - there's really no need for `custom-discovery` vs. other discovery-related events (e.g. `mqtt-fog-up`)
 - there should be a single discovery event, `discovery`, that all Registries call for any discovery.
@@ -13,6 +15,21 @@
             - the mqtt message
             - the mdns JSON.stringified `name` field that can be passed when creating an advertisement
             - the local storage value of the <attr, value> pair
+
+- issues:
+    - how can we detect duplicates? [SOLVED]
+        - in Registar, we store a map of emitted event names to a map of node id to values, e.g.
+            {
+                event: {
+                    nodeId: value
+                }
+            }
+          for the last value received for the event/nodeId combo
+        - when we receive a discovery event, we look up the value in the map of maps and compare it with the previous value
+            - we can do this by recursively comparing the fields of the value until reaching base cases (strings and numbers)
+
+- clean-up TODOS:
+    - when announcing one's status on the network, make sure to grab your latest IP address right before making the announcement
 
 **LocalRegistry**
 
