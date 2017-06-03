@@ -85,11 +85,51 @@ function Registrar(app, machType, id, port) {
     this.mdnsRegistry = new MDNSRegistry(app, machType, id, port);
     this.localRegistry = new LocalRegistry(app, machType, id, port);
 
-    // reserved attributes
-    this.reservedAttrs = ['status', 'ipandport', 'ip', 'port', 'lastCheckIn', 'createdAt'];
-
-    // map of id to information discovered about the node
+    // store discoveries here so that we can easily check for duplicates
     this.discoveries = {};
+
+    // reserved attributes
+    this.reservedAttrs = ['status', 'ip', 'port', 'lastCheckIn', 'createdAt'];
+
+    // prep the default discoveries to be made by a node:
+    // devices discover fogs and fogs discover clouds
+    if (this.machType === globals.NodeType.DEVICE) {
+        var attrs = {
+            fog: {
+                status: {
+                    dupName: 'fog-status-change',
+                    // a tag-to-event map
+                    events: {
+                        online: 'fog-up',
+                        offline: 'fog-down'
+                    }
+                    // if the status value is `offline`, then we emit fog-down, else we emit fog-up
+                }
+            }
+        };
+        this.mqttRegistry.discoverAttributes(attrs);
+        this.mdnsRegistry.discoverAttributes(attrs);
+        this.localRegistry.discoverAttributes(attrs);
+    } else if (this.machType === globals.NodeType.FOG) {
+        var attrs = {
+            cloud: {
+                status: {
+                    dupName: 'cloud-status-change',
+                    events: {
+                        online: 'cloud-up',
+                        offline: 'cloud-down'
+                    }
+                }
+            }
+        };
+        this.mqttRegistry.discoverAttributes(attrs);
+        this.mdnsRegistry.discoverAttributes(attrs);
+        this.localRegistry.discoverAttributes(attrs);
+    } else {
+        // no default cloud discoveries
+    }
+
+    // listen for events from the Registries
 
     var self = this;
 
@@ -110,30 +150,53 @@ function Registrar(app, machType, id, port) {
         console.log('mdns success');
     });
 
-    this.mqttRegistry.on('discovery', function(emit, nodeId, value) {
-        if (!self._isDuplicate(self, emit, nodeId, value)) {
-            self._updateDiscoveries(self, emit, nodeId, value);
-            self.emit(emit, nodeId, value);
-        }
+    this.mqttRegistry.on('discovery', function(event, nodeId, value) {
+        self._respondToDiscoveryEvent(self, event, nodeId, value);
     });
 
-    this.mdnsRegistry.on('discovery', function(emit, nodeId, value) {
-        if (!self._isDuplicate(self, emit, nodeId, value)) {
-            self._updateDiscoveries(self, emit, nodeId, value);
-            self.emit(emit, nodeId, value);
-        }
+    this.mdnsRegistry.on('discovery', function(event, nodeId, value) {
+        self._respondToDiscoveryEvent(self, event, nodeId, value);
     });
 
-    this.localRegistry.on('discovery', function(emit, nodeId, value) {
-        if (!self._isDuplicate(self, emit, nodeId, value)) {
-            self._updateDiscoveries(self, emit, nodeId, value);
-            self.emit(emit, nodeId, value);
-        }
+    this.localRegistry.on('discovery', function(event, nodeId, value) {
+        self._respondToDiscoveryEvent(self, event, nodeId, value);
     });
 }
 
 /* Registrar inherits from EventEmitter */
 Registrar.prototype = new EventEmitter();
+
+Registrar.prototype._respondToDiscoveryEvent = function(self, event, nodeId, value) {
+    if (event instanceof Object) {
+        // check that value is an object with tag and value fields
+        if (value instanceof Object) {
+            // tag field
+            if (!value.hasOwnProperty('tag')) {
+                throw new Error('value does not have tag field as expected');
+            } else  {
+                if (typeof value.tag != 'string') {
+                    throw new Error('value\'s tag field must be a string');
+                }
+            }
+            // value field
+            if (!value.hasOwnProperty('value')) {
+                throw new Error('value does not have value field as expected');
+            }
+        } else {
+            throw Error('value not an object as expected');
+        }
+
+        if (!self._isDuplicate(self, event.dupName, nodeId, value.value)) {
+            self._updateDiscoveries(self, event.dupName, nodeId, value.value);
+            self.emit(event.events[value[tag]], nodeId, value.value);
+        }
+    } else {
+        if (!self._isDuplicate(self, event, nodeId, value)) {
+            self._updateDiscoveries(self, event, nodeId, value);
+            self.emit(event, nodeId, value);
+        }
+    }
+}
 
 /**
  * Returns true if a discovery is a duplicate and false otherwise
@@ -171,7 +234,7 @@ Registrar.prototype._updateDiscoveries = function(self, emit, nodeId, value) {
 Registrar.prototype.registerAndDiscover = function(options) {
     if (options !== undefined) {
         if (typeof options !== 'object') {
-            throw Error('options must be an object; see the docs');
+            throw new Error('options must be an object; see the docs');
         }
 
         if (options.attributes !== undefined) {
@@ -236,7 +299,7 @@ Registrar.prototype.discoverAttributes = function(attrs) {
 Registrar.prototype._checkAndReformatDiscoverAttributes = function(attrs) {
     // error handling
     if (typeof attrs !== 'object') {
-        throw new Error('attrs must be an object');
+        throw new Error('you must specity the attributes you want discovered as an object - see the docs');
     }
     // check that the attrs parameter is properly formed
     var formedAttrs;
@@ -276,7 +339,26 @@ Registrar.prototype._checkAndReformatDiscoverAttributes = function(attrs) {
  */
 Registrar.prototype._checkForm = function(attrs) {
     for (var key in attrs) {
-        if (typeof attrs[key] != 'string') {
+        if (attrs[key] instanceof Object) {
+            // check dupName
+            if (!attrs[key].hasOwnProperty('dupName')) {
+                throw new Error('missing dupName property');
+            } else {
+                if (typeof attrs[key].dupName != 'string') {
+                    throw new Error('dupName must be a string');
+                }
+            }
+            // check events
+            if (!attrs[key].hasOwnProperty('events')) {
+                throw new Error('missing events property');
+            } else {
+                for (var tag in attrs[key].events) {
+                    if (typeof attrs[key].events[tag] != 'string') {
+                        throw new Error('the event name\'' + attrs[key].events[tag] + '\' must be a string');
+                    }
+                }
+            }
+        } else if (typeof attrs[key] != 'string') {
             throw new Error('the event name\'' + attrs[key] + '\' must be a string')
         }
     }

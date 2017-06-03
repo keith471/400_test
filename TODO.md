@@ -1,6 +1,8 @@
 # TODO
 
 Next: Adapt MQTT, mDNS, and Local Storage to the simplified and uniform form described below
+- adapt addAttribute to be able to take a function that returns the attribute value and is to be executed directly before publishing the attribute (allows for the user to pass attributes that can be updated dynamically)
+    - write it to work for ip address updates!
 
 **Improve structure**
 - there's really no need for `custom-discovery` vs. other discovery-related events (e.g. `mqtt-fog-up`)
@@ -30,6 +32,7 @@ Next: Adapt MQTT, mDNS, and Local Storage to the simplified and uniform form des
 
 - clean-up TODOS:
     - when announcing one's status on the network, make sure to grab your latest IP address right before making the announcement
+    - clean up all the responses to discovery event
 
 **LocalRegistry**
 

@@ -14,6 +14,10 @@ function MQTTRegistry(app, machType, id, port) {
     this.id = id;
     this.port = port;
     this.ip = this._getIPv4Address();
+
+    // set up default discoveries here
+    // default attr is status and should be set only when publishing status, in order to keep IP address accurate
+    // actually do this in Regisrar constructor, so the default behavior is all in one place
 }
 
 /* MQTTRegistry inherits from Registry */
@@ -391,7 +395,7 @@ MQTTRegistry.prototype._getConnectionOptions = function(appName, machType, machI
 MQTTRegistry.prototype.addAttributes = function(attrs) {
     // store the attrs on the node
     for (var key in attrs) {
-        this.attributes[key] = attrs[key];
+        this._addAttribute(key, attrs[key]);
     }
 
     // if the client is currently connected to the broker, then publish the attrs
@@ -409,6 +413,11 @@ MQTTRegistry.prototype.addAttributes = function(attrs) {
     }
 }
 
+MQTTRegistry.prototype._addAttribute = function(attr, value) {
+    this.attributes[key] = value;
+}
+
+// TODO: avoid sending repeat subscriptions
 MQTTRegistry.prototype.discoverAttributes = function(attrs) {
     // store the attributes on the node
     var subs = {};
