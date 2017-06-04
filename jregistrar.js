@@ -97,12 +97,8 @@ function Registrar(app, machType, id, port) {
         var attrs = {
             fog: {
                 status: {
-                    dupName: 'fog-status-change',
-                    // a tag-to-event map
-                    events: {
-                        online: 'fog-up',
-                        offline: 'fog-down'
-                    }
+                    online: 'fog-up',
+                    offline: 'fog-down'
                     // if the status value is `offline`, then we emit fog-down, else we emit fog-up
                 }
             }
@@ -114,11 +110,8 @@ function Registrar(app, machType, id, port) {
         var attrs = {
             cloud: {
                 status: {
-                    dupName: 'cloud-status-change',
-                    events: {
-                        online: 'cloud-up',
-                        offline: 'cloud-down'
-                    }
+                    online: 'cloud-up',
+                    offline: 'cloud-down'
                 }
             }
         };
@@ -150,23 +143,24 @@ function Registrar(app, machType, id, port) {
         console.log('mdns success');
     });
 
-    this.mqttRegistry.on('discovery', function(event, nodeId, value) {
-        self._respondToDiscoveryEvent(self, event, nodeId, value);
+    this.mqttRegistry.on('discovery', function(attr, event, nodeId, value) {
+        self._respondToDiscoveryEvent(self, attr, event, nodeId, value);
     });
 
-    this.mdnsRegistry.on('discovery', function(event, nodeId, value) {
-        self._respondToDiscoveryEvent(self, event, nodeId, value);
+    this.mdnsRegistry.on('discovery', function(attr, event, nodeId, value) {
+        self._respondToDiscoveryEvent(self, attr, event, nodeId, value);
     });
 
-    this.localRegistry.on('discovery', function(event, nodeId, value) {
-        self._respondToDiscoveryEvent(self, event, nodeId, value);
+    this.localRegistry.on('discovery', function(attr, event, nodeId, value) {
+        self._respondToDiscoveryEvent(self, attr, event, nodeId, value);
     });
 }
 
 /* Registrar inherits from EventEmitter */
 Registrar.prototype = new EventEmitter();
 
-Registrar.prototype._respondToDiscoveryEvent = function(self, event, nodeId, value) {
+Registrar.prototype._respondToDiscoveryEvent = function(self, attr, event, nodeId, value) {
+    /*
     if (event instanceof Object) {
         // check that value is an object with tag and value fields
         if (value instanceof Object) {
@@ -186,39 +180,46 @@ Registrar.prototype._respondToDiscoveryEvent = function(self, event, nodeId, val
             throw Error('value not an object as expected');
         }
 
-        if (!self._isDuplicate(self, event.dupName, nodeId, value.value)) {
-            self._updateDiscoveries(self, event.dupName, nodeId, value.value);
-            self.emit(event.events[value[tag]], nodeId, value.value);
+        // if uncommented, need to go through and fix this
+        if (!self._isDuplicate(self, attr, nodeId, value)) {
+            self._updateDiscoveries(self, attr, nodeId, value);
+            self.emit(event.events[value].tag, nodeId, value.value);
         }
     } else {
-        if (!self._isDuplicate(self, event, nodeId, value)) {
+        if (!self._isDuplicate(self, attr, nodeId, value)) {
             self._updateDiscoveries(self, event, nodeId, value);
             self.emit(event, nodeId, value);
         }
+    }
+    */
+
+    if (!self._isDuplicate(self, attr, nodeId, value)) {
+        self._updateDiscoveries(self, attr, nodeId, value);
+        self.emit(event, nodeId, value);
     }
 }
 
 /**
  * Returns true if a discovery is a duplicate and false otherwise
  */
-Registrar.prototype._isDuplicate = function(self, emit, nodeId, value) {
-    if (!self.discoveries.hasOwnProperty(emit)) {
+Registrar.prototype._isDuplicate = function(self, attr, nodeId, value) {
+    if (!self.discoveries.hasOwnProperty(attr)) {
         return false;
     }
 
-    if (!self.discoveries[emit].hasOwnProperty(nodeId)) {
+    if (!self.discoveries[attr].hasOwnProperty(nodeId)) {
         return false;
     }
 
     // compare the values
-    return equivalentValues(value, self.discoveries[emit][nodeId]);
+    return equivalentValues(value, self.discoveries[attr][nodeId]);
 }
 
-Registrar.prototype._updateDiscoveries = function(self, emit, nodeId, value) {
-    if (!self.discoveries.hasOwnProperty(emit)) {
-        self.discoveries[emit] = {};
+Registrar.prototype._updateDiscoveries = function(self, attr, nodeId, value) {
+    if (!self.discoveries.hasOwnProperty(attr)) {
+        self.discoveries[attr] = {};
     }
-    self.discoveries[emit][nodeId] = value;
+    self.discoveries[attr][nodeId] = value;
 }
 
 /**
@@ -234,7 +235,7 @@ Registrar.prototype._updateDiscoveries = function(self, emit, nodeId, value) {
 Registrar.prototype.registerAndDiscover = function(options) {
     if (options !== undefined) {
         if (typeof options !== 'object') {
-            throw new Error('options must be an object; see the docs');
+            throw new Error('options must be an object - see the docs');
         }
 
         if (options.attributes !== undefined) {
@@ -339,27 +340,31 @@ Registrar.prototype._checkAndReformatDiscoverAttributes = function(attrs) {
  */
 Registrar.prototype._checkForm = function(attrs) {
     for (var key in attrs) {
-        if (attrs[key] instanceof Object) {
-            // check dupName
-            if (!attrs[key].hasOwnProperty('dupName')) {
-                throw new Error('missing dupName property');
+        if (key == 'status') {
+            // ensure that online and offline events are specified
+            if (!attrs.status instanceof Object) {
+                throw new Error('discovery of the status attribute requires online and offline event names, passed in an object - see the docs');
+            }
+
+            // online
+            if (!attrs.status.hasOwnProperty('online')) {
+                throw new Error('online event required for discovery of status attribute');
             } else {
-                if (typeof attrs[key].dupName != 'string') {
-                    throw new Error('dupName must be a string');
+                if (typeof attrs.status.online != 'string') {
+                    throw new Error('the event name \'' + attrs.status.online + '\' must be a string');
                 }
             }
-            // check events
-            if (!attrs[key].hasOwnProperty('events')) {
-                throw new Error('missing events property');
+
+            // offline
+            if (!attrs.status.hasOwnProperty('offline')) {
+                throw new Error('offline event required for discovery of status attribute');
             } else {
-                for (var tag in attrs[key].events) {
-                    if (typeof attrs[key].events[tag] != 'string') {
-                        throw new Error('the event name\'' + attrs[key].events[tag] + '\' must be a string');
-                    }
+                if (typeof attrs.status.offline != 'string') {
+                    throw new Error('the event name \'' + attrs.status.offline + '\' must be a string');
                 }
             }
         } else if (typeof attrs[key] != 'string') {
-            throw new Error('the event name\'' + attrs[key] + '\' must be a string')
+            throw new Error('the event name \'' + attrs[key] + '\' must be a string')
         }
     }
 }

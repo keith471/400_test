@@ -1,6 +1,7 @@
 # TODO
 
 Next: Adapt MQTT, mDNS, and Local Storage to the simplified and uniform form described below
+- in a Registry, you need to check if the user wants to discover statuses, and treat these differently. Otherwise, all other discoveries are treated exactly the same: just emit them to the Registrar.
 - adapt addAttribute to be able to take a function that returns the attribute value and is to be executed directly before publishing the attribute (allows for the user to pass attributes that can be updated dynamically)
     - write it to work for ip address updates!
 
@@ -8,7 +9,8 @@ Next: Adapt MQTT, mDNS, and Local Storage to the simplified and uniform form des
 - there's really no need for `custom-discovery` vs. other discovery-related events (e.g. `mqtt-fog-up`)
 - there should be a single discovery event, `discovery`, that all Registries call for any discovery.
 - the parameters to the function called upon receipt of the event should be:
-    - emit: the name of the event to emit to the application (e.g. a built-in event, such as `fog-up`, or a user-specifed event such as `thermostat`)
+    - attr: the name of the attribute that was discovered
+    - event: the name of the event to emit to the application (e.g. a built-in event, such as `fog-up`, or a user-specifed event such as `thermostat`)
     - nodeId: the id of the node whose attribute was discovered
     - value: the value associated with the attribute
         - this should be anything that is JSON.parsable (i.e. any basic value, array, or object)
