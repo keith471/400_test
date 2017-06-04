@@ -1,5 +1,34 @@
 # On Custom Discoveries
 
+## Attributes
+- can be anything you want, as long as it is JSON.stringfiable
+    - e.g.
+        - 'online'
+        - [0, 2, 4]
+        - 1000
+        - 100.0
+        - { key: 'value' }
+- can also be a function which returns attribute (again, anything JSON.stringifiable)
+    - this function will be called prior to announcing the attribute, each time it is to be announced, in order to get the attribute to announce
+    - it is useful for attributes that could change
+    - e.g.
+        - You could use bind
+        ```
+        {
+            example: function() {
+                // do stuff
+            }.bind(null)
+        }
+        ```
+        - Or a closure:
+        ```
+        {
+            example: function() {
+                return getTheAttribute(params);
+            }
+        }
+        ```
+
 ## Reserved Attributes
 - status: reserved for 'online'/'offline' status announcements (MQTT)
 - ipandport: reserved for ip/port connection information (MQTT)

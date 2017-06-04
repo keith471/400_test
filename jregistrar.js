@@ -2,7 +2,8 @@ var EventEmitter = require('events'),
     globals = require('./constants').globals,
     MQTTRegistry = require('./mqttregistry'),
     MDNSRegistry = require('./mdnsregistry'),
-    LocalRegistry = require('./localregistry');
+    LocalRegistry = require('./localregistry'),
+    Registry = require('./registry');
 
 //==============================================================================
 // Helpers
@@ -91,10 +92,27 @@ function Registrar(app, machType, id, port) {
     // reserved attributes
     this.reservedAttrs = ['status', 'ip', 'port', 'lastCheckIn', 'createdAt'];
 
+    // set up default attributes, which are the same for devices, fogs, and clouds (i.e. just status)
+    // default attributes:
+    // status
+    var attrs = {
+        status: function() {
+            return {
+                port: port,
+                ip: Registrar.getIPv4Address();
+            };
+        }
+    };
+    this.mqttRegistry.addAttributes(attrs);
+    this.mdnsRegistry.addAttributes(attrs);
+    this.localRegistry.addAttributes(attrs);
+
     // prep the default discoveries to be made by a node:
     // devices discover fogs and fogs discover clouds
     if (this.machType === globals.NodeType.DEVICE) {
-        var attrs = {
+        // default discoveries:
+        // devices discover fogs
+        var disc = {
             fog: {
                 status: {
                     online: 'fog-up',
@@ -103,11 +121,13 @@ function Registrar(app, machType, id, port) {
                 }
             }
         };
-        this.mqttRegistry.discoverAttributes(attrs);
-        this.mdnsRegistry.discoverAttributes(attrs);
-        this.localRegistry.discoverAttributes(attrs);
+        this.mqttRegistry.discoverAttributes(disc);
+        this.mdnsRegistry.discoverAttributes(disc);
+        this.localRegistry.discoverAttributes(disc);
     } else if (this.machType === globals.NodeType.FOG) {
-        var attrs = {
+        // default discoveries:
+        // fogs discover clouds
+        var disc = {
             cloud: {
                 status: {
                     online: 'cloud-up',
@@ -115,9 +135,9 @@ function Registrar(app, machType, id, port) {
                 }
             }
         };
-        this.mqttRegistry.discoverAttributes(attrs);
-        this.mdnsRegistry.discoverAttributes(attrs);
-        this.localRegistry.discoverAttributes(attrs);
+        this.mqttRegistry.discoverAttributes(disc);
+        this.mdnsRegistry.discoverAttributes(disc);
+        this.localRegistry.discoverAttributes(disc);
     } else {
         // no default cloud discoveries
     }

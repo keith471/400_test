@@ -8,12 +8,15 @@ var mqtt = require('mqtt'),
     regGen = require('./regexGenerator'),
     Registry = require('./registry');
 
-function MQTTRegistry(app, machType, id, port) {
+function MQTTRegistry(app, machType, id, port, subQos, pubQos) {
     this.app = app;
     this.machType = machType;
     this.id = id;
     this.port = port;
-    this.ip = this._getIPv4Address();
+    // the quality of service to use for subscriptions
+    this.subQos = subQos;
+    // the quality of service to use for publications
+    this.pubQos = pubQos;
 
     // set up default discoveries here
     // default attr is status and should be set only when publishing status, in order to keep IP address accurate
@@ -25,6 +28,7 @@ MQTTRegistry.prototype = new Registry();
 
 /**
  * Performs basic registration and discovery
+ * Designed to be called multiple times if need be
  */
 MQTTRegistry.prototype.registerAndDiscover = function(options) {
     // collect old vs. new subscriptions and attributes
@@ -37,15 +41,15 @@ MQTTRegistry.prototype.registerAndDiscover = function(options) {
     var oldSubs = {};
 
     for (var key in this.discoverAttributes.device) {
-        oldSubs[this.app + '/announce/device/+/' + key] = 1;
+        oldSubs[this.app + '/device/+/' + key] = 1;
     }
 
     for (var key in this.discoverAttributes.fog) {
-        oldSubs[this.app + '/announce/fog/+/' + key] = 1;
+        oldSubs[this.app + '/fog/+/' + key] = 1;
     }
 
     for (var key in this.discoverAttributes.cloud) {
-        oldSubs[this.app + '/announce/cloud/+/' + key] = 1;
+        oldSubs[this.app + '/cloud/+/' + key] = 1;
     }
 
     var newAttrs = null;
@@ -67,7 +71,7 @@ MQTTRegistry.prototype.registerAndDiscover = function(options) {
             if (newSubs === null) {
                 newSubs = {};
             }
-            newSubs[this.app + '/announce/device/+/' + key] = 1;
+            newSubs[this.app + '/device/+/' + key] = this.subQos;
         }
 
         for (var key in options.discoverAttributes.fog) {
@@ -75,7 +79,7 @@ MQTTRegistry.prototype.registerAndDiscover = function(options) {
             if (newSubs === null) {
                 newSubs = {};
             }
-            newSubs[this.app + '/announce/fog/+/' + key] = 1;
+            newSubs[this.app + '/fog/+/' + key] = this.subQos;
         }
 
         for (var key in options.discoverAttributes.cloud) {
@@ -83,53 +87,22 @@ MQTTRegistry.prototype.registerAndDiscover = function(options) {
             if (newSubs === null) {
                 newSubs = {};
             }
-            newSubs[this.app + '/announce/cloud/+/' + key] = 1;
+            newSubs[this.app + '/cloud/+/' + key] = this.subQos;
         }
     }
 
     // create an mqtt client
     this.client = mqtt.connect(constants.mqtt.brokerUrl, this._getConnectionOptions(this.app, this.machType, this.id));
 
-    if (this.machType === constants.globals.NodeType.DEVICE) {
-        // add DEFAULT subscriptions of a device node
-        // 1. fog status announcements and
-        // 2. fog ip/port announcements
-        var fogStatusTopic = this.app + '/announce/fog/+/status';
-        var fogResolutionTopic = this.app + '/announce/fog/+/ipandport';
-
-        oldSubs[fogStatusTopic] = 1;
-        oldSubs[fogResolutionTopic] = 1;
-
-        this._prepareForEvents(newSubs, oldSubs, newAttrs, oldAttrs, 0);
-    } else if (this.machType === constants.globals.NodeType.FOG) {
-        // add DEFAULT subscriptions of a fog node:
-        // 1. announcements on cloud statuses
-        // 2. announcements on cloud connection info (ip and port)
-        // 3. queries to the fog node's status
-        var cloudStatusTopic = this.app + '/announce/cloud/+/status';
-        var cloudResolutionTopic = this.app + '/announce/cloud/+/ipandport';
-        var queryTopic = this.app + '/query/fog/' + this.id + '/ipandport';
-
-        oldSubs[cloudStatusTopic] = 1;
-        oldSubs[cloudResolutionTopic] = 1;
-        oldSubs[queryTopic] = 1;
-
-        this._prepareForEvents(newSubs, oldSubs, newAttrs, oldAttrs, 1);
-    } else {
-        // add DEFAULT subscriptions of a cloud node:
-        // 1. queries to the cloud's status
-        var queryTopic = this.app + '/query/cloud/' + this.id + '/ipandport';
-
-        oldSubs[queryTopic] = 1;
-
-        this._prepareForEvents(newSubs, oldSubs, newAttrs, oldAttrs, 1);
-    }
+    // set up event listeners for the client
+    this._prepareForEvents(newSubs, oldSubs, newAttrs, oldAttrs);
 }
 
 /**
  * Publish a query for a node's port and ip address
  * Pass as a message the id of the node making the request, though this is not used at this point
  */
+/*
 MQTTRegistry.prototype.query = function(machType, machId) {
     this.client.publish(this.app + '/query/' + machType + '/' + machId + '/ipandport', this.id, {qos: 1, retain: false}, function (err) {
         if (err) {
@@ -137,11 +110,12 @@ MQTTRegistry.prototype.query = function(machType, machId) {
         }
     });
 }
+*/
 
 /**
  * A general helper for listening for events from the MQTT client
  */
-MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, oldAttrs, publicationQos) {
+MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, oldAttrs) {
     var self = this;
 
     /* connect event emitted on successful connection or reconnection */
@@ -150,6 +124,7 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
         if (!connack.sessionPresent) {
             // make subscriptions
             if (newSubs !== null) {
+                // add newSubs to oldSubs
                 for (var key in newSubs) {
                     oldSubs[key] = newSubs[key];
                 }
@@ -158,11 +133,12 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
                 logger.log.info(self.machType + ' ' + self.id + ' subscribed to ' + JSON.stringify(granted));
                 // make publications
                 if (newAttrs !== null) {
+                    // add new attrs to old attrs
                     for (var key in newAttrs) {
                         oldAttrs[key] = newAttrs[key];
                     }
                 }
-                self._publishWithRetries(oldAttrs, publicationQos, constants.mqtt.retries, self);
+                self._publishWithRetries(oldAttrs, constants.mqtt.retries, self);
             });
         } else {
             // our connection is already present, meaning that the broker is still aware of our old subscriptions
@@ -174,17 +150,14 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
                     if (newAttrs === null) {
                         newAttrs = {};
                     }
-                    newAttrs[status] = 'online';
-                    self._publishWithRetries(newAttrs, publicationQos, constants.mqtt.retries, self);
+                    self._publishWithRetries(newAttrs, constants.mqtt.retries, self);
                 });
             } else {
                 if (newAttrs === null) {
                     newAttrs = {};
                 }
-                newAttrs[status] = 'online';
-                self._publishWithRetries(newAttrs, publicationQos, constants.mqtt.retries, self);
+                self._publishWithRetries(newAttrs, constants.mqtt.retries, self);
             }
-
         }
     });
 
@@ -237,16 +210,22 @@ MQTTRegistry.prototype._subscribeWithRetries = function(subs, retries, self, cb)
 /**
  * Helper for publishing a node's presence on the network
  */
-MQTTRegistry.prototype._publishWithRetries = function(attrs, publicationQos, retries, self) {
+MQTTRegistry.prototype._publishWithRetries = function(attrs, retries, self) {
+    var msg;
     for (var key in attrs) {
-        self.client.publish(self.app + '/announce/' + self.machType + '/' + self.id + '/' + key, attrs[key], {qos: 1, retain: true}, function (err) {
+        if (attrs[key] instanceof Function) {
+            msg = JSON.stringify(attrs[key]());
+        } else {
+            msg = JSON.stringify(attrs[key]);
+        }
+        self.client.publish(self.app + '/' + self.machType + '/' + self.id + '/' + key, msg, {qos: self.pubQos, retain: true}, function (err) {
             if (err) {
                 logger.log.error(err);
                 if (retries === 0) {
                     // TODO: do we really need to emit an error if one publication is not successful? What if it is not an important publication
                     self.emit('mqtt-error');
                 } else {
-                    setTimeout(self._publishWithRetries, constants.mqtt.retryInterval, attrs, publicationQos, retries - 1, self, cb);
+                    setTimeout(self._publishWithRetries, constants.mqtt.retryInterval, attrs, retries - 1, self);
                 }
             }
         });
@@ -254,93 +233,28 @@ MQTTRegistry.prototype._publishWithRetries = function(attrs, publicationQos, ret
 }
 
 /**
- * Process an update on the status of a node
- * topic [string]: app + '/announce/<machType>/+/status'
- * message [string]: whether the node is offline or online
- */
-MQTTRegistry.prototype._processStatusUpdate = function(self, machType, nodeId, message) {
-    // emit event depending on whether the node went online or offline
-    if (machType === constants.globals.NodeType.FOG) {
-        if (message === 'online') {
-            self.emit('mqtt-fog-up', nodeId);
-        } else {
-            self.emit('mqtt-fog-down', nodeId);
-        }
-    } else if (machType === constants.globals.NodeType.CLOUD) {
-        if (message === 'online') {
-            self.emit('mqtt-cloud-up', nodeId);
-        } else {
-            self.emit('mqtt-cloud-down', nodeId);
-        }
-    }
-}
-
-/**
- * Process a message containing the port and ip of a node
- * topic [string]: app + '/announce/<machType>/+/ipandport'
- * message [string]: '{ip: ip, port: port}'
- */
-MQTTRegistry.prototype._processIpAndPort = function(self, machType, nodeId, message) {
-    var response = JSON.parse(message);
-    response.id = nodeId;
-
-    if (machType === constants.globals.NodeType.FOG) {
-        self.emit('mqtt-fog-ipandport', response);
-    } else if (machType === constants.globals.NodeType.CLOUD) {
-        self.emit('mqtt-cloud-ipandport', response);
-    }
-}
-
-/**
- * Respond to a query for our ip/port by announcing it
- */
-MQTTRegistry.prototype._replyToQuery = function(self) {
-    var message = JSON.stringify({ ip: self._getIPv4Address(), port: self.port });
-    var topic;
-    if (self.machType === constants.globals.NodeType.DEVICE) {
-        topic = self.app + '/announce/device/' + self.id + '/ipandport';
-    } else if (self.machType === constants.globals.NodeType.FOG) {
-        topic = self.app + '/announce/fog/' + self.id + '/ipandport';
-    } else {
-        topic = self.app + '/announce/cloud/' + self.id + '/ipandport';
-    }
-    self.client.publish(topic, message, {qos: 1, retain: false}, function (err) {
-        if (err) {
-            // TODO handle
-            logger.log.error(err);
-        }
-    });
-}
-
-/**
  * Handles receipt of a message from the MQTT broker. Finds the subscription that
  * the message corresponds to and executes the appropriate action.
  */
 MQTTRegistry.prototype._handleMessage = function(self, topic, message) {
-    // parse the type of the message, the mach type, the mach id, and the attribute out of the topic
+    // parse the mach type, the mach id, and the attribute out of the topic
     var components = topic.split('/');
-    var msgType = components[1];
-    var machType = components[2];
-    var machId = components[3];
-    var attr = components[4];
+    var machType = components[1];
+    var machId = components[2];
+    var attr = components[3];
 
-    if (msgType === 'announce') {
-        if (attr === 'status' && machType !== constants.globals.NodeType.DEVICE) {
-            self._processStatusUpdate(self, machType, machId, message.toString());
-        } else if (attr === 'ipandport' && machType !== constants.globals.NodeType.DEVICE) {
-            self._processIpAndPort(self, machType, machId, message.toString());
+    var eventName;
+    if (attr === 'status') {
+        if (message === 'offline') {
+            eventName = self.discoverAttributes[machType].status.offline;
         } else {
-            // custom publication
-            var emit = self.discoverAttributes[machType][attr];
-            if (emit !== undefined) {
-                self.emit('custom-discovery', emit, machId, message.toString());
-            }
+            eventName = self.discoverAttributes[machType].status.online;
         }
-    } else if (msgType === 'query') {
-        if (attr === 'ipandport') {
-            self._replyToQuery(self);
-        }
+    } else {
+        eventName = self.discoverAttributes[machType][attr];
     }
+
+    self.emit('discovery', eventName, machId, message.toString());
 }
 
 /**
@@ -354,21 +268,21 @@ MQTTRegistry.prototype._getConnectionOptions = function(appName, machType, machI
 
     if (machType === constants.globals.NodeType.DEVICE) {
         will = {
-            topic: appName + '/announce/device/' + machId + '/status',
+            topic: appName + '/device/' + machId + '/status',
             payload: 'offline',
             qos: 0,
             retain: true
         };
     } else if (machType === constants.globals.NodeType.FOG) {
         will = {
-            topic: appName + '/announce/fog/' + machId + '/status',
+            topic: appName + '/fog/' + machId + '/status',
             payload: 'offline',
             qos: 1,
             retain: true
         };
     } else {
         will = {
-            topic: appName + '/announce/cloud/' + machId + '/status',
+            topic: appName + '/cloud/' + machId + '/status',
             payload: 'offline',
             qos: 1,
             retain: true
@@ -402,14 +316,7 @@ MQTTRegistry.prototype.addAttributes = function(attrs) {
     // otherwise, we can simply wait and the attrs will be published next time the client
     // connects to the broker
     if (this.client.connected) {
-        for (var key in attrs) {
-            this.client.publish(this.app + '/announce/' + this.machType + '/' + this.id + '/' + key, attrs[key], {qos: 1, retain: true}, function (err) {
-                if (err) {
-                    // TODO handle
-                    logger.log.error(err);
-                }
-            });
-        }
+        this._publishWithRetries(attrs, constants.mqtt.retries, this);
     }
 }
 
@@ -425,19 +332,19 @@ MQTTRegistry.prototype.discoverAttributes = function(attrs) {
     for (var key in attrs.device) {
         isEmpty = false;
         this.discoverAttributes.device[key] = attrs.device[key];
-        subs[this.app + '/announce/device/+/' + key] = 1;
+        subs[this.app + '/device/+/' + key] = 1;
     }
 
     for (var key in attrs.fog) {
         isEmpty = false;
         this.discoverAttributes.fog[key] = attrs.fog[key];
-        subs[this.app + '/announce/fog/+/' + key] = 1;
+        subs[this.app + '/fog/+/' + key] = 1;
     }
 
     for (var key in attrs.cloud) {
         isEmpty = false;
         this.discoverAttributes.cloud[key] = attrs.cloud[key];
-        subs[this.app + '/announce/cloud/+/' + key] = 1;
+        subs[this.app + '/cloud/+/' + key] = 1;
     }
 
     // if the client is currently connected to the broker, then subscribe to the attrs

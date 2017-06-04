@@ -28,7 +28,7 @@ Registry.prototype = new EventEmitter();
 /**
  * returns the IPv4 address of the node
  */
-Registry.prototype._getIPv4Address = function() {
+Registry.prototype.getIPv4Address = function() {
     var niaddrs = os.networkInterfaces();
     for (var ni in niaddrs) {
         nielm = niaddrs[ni];
@@ -43,7 +43,7 @@ Registry.prototype._getIPv4Address = function() {
 /**
  * returns the url the node can be accessed on
  */
-Registry.prototype._getUrl = function() {
+Registry.prototype.getUrl = function() {
     return 'tcp://' + this.ip + ':' + this.port;
 }
 
