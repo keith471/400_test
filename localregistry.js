@@ -223,7 +223,7 @@ LocalRegistry.prototype._scan = function(self) {
         for (var i = 0; i < constants.localStorage.numBins; i++) {
             binName = baseName + i;
             machs = JSON.parse(self.localStorage.getItem(binName));
-            self._makeDiscoveries(machs, constants.globals.NodeType.FOG);
+            self._makeDiscoveries(machs, self.discoverAttributes.fog);
         }
     }
 
@@ -232,7 +232,7 @@ LocalRegistry.prototype._scan = function(self) {
         for (var i = 0; i < constants.localStorage.numBins; i++) {
             binName = baseName + i;
             machs = JSON.parse(self.localStorage.getItem(binName));
-            self._makeDiscoveries(machs, constants.globals.NodeType.CLOUD);
+            self._makeDiscoveries(machs, self.discoverAttributes.cloud);
         }
     }
 }

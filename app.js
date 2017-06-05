@@ -24,25 +24,25 @@ var reggie = new Registrar(app, machType, id, port);
 // Device nodes will receive these events
 //------------------------------------------------------------------------------
 
-reggie.on('fog-up', function(fog) {
-    console.log('Fog up: ' + JSON.stringify(fog));
+reggie.on('fog-up', function(fogId, connInfo) {
+    console.log('FOG UP: id: ' + fogId + ', ip: ' + connInfo.ip + ', port: ' + connInfo.port);
 });
 
 reggie.on('fog-down', function(fogId) {
-    console.log('Fog down: ' + fogId);
+    console.log('FOG DOWN: id: ' + fogId);
 });
 
 //------------------------------------------------------------------------------
 // Fog nodes will receive these events
 //------------------------------------------------------------------------------
 
-reggie.on('cloud-up', function(cloud) {
-    console.log('Cloud up: ' + JSON.stringify(cloud));
+reggie.on('cloud-up', function(cloudId, connInfo) {
+    console.log('CLOUD UP: id: ' + cloudId + ', ip: ' + connInfo.ip + ', port: ' + connInfo.port);
 
 });
 
 reggie.on('cloud-down', function(cloudId) {
-    console.log('Cloud down: ' + cloudId);
+    console.log('CLOUD DOWN: id: ' + cloudId);
 });
 
 reggie.registerAndDiscover();

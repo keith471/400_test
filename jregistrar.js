@@ -90,7 +90,7 @@ function Registrar(app, machType, id, port) {
     this.discoveries = {};
 
     // reserved attributes
-    this.reservedAttrs = ['status', 'ip', 'port', 'lastCheckIn', 'createdAt'];
+    this.reservedAttrs = ['status', 'lastCheckIn', 'createdAt'];
 
     // set up default attributes, which are the same for devices, fogs, and clouds (i.e. just status)
     // default attributes:
@@ -146,6 +146,7 @@ function Registrar(app, machType, id, port) {
 
     var self = this;
 
+    // listen for mqtt errors
     this.mqttRegistry.on('error', function() {
         // mqtt cleanup
         self.mqttRegistry.quit(function() {
@@ -153,16 +154,14 @@ function Registrar(app, machType, id, port) {
         });
     });
 
+    // listen for mdns errors
     this.mdnsRegistry.on('error', function() {
         // mdns cleanup
         self.mdnsRegistry.quit();
         setTimeout(self._retry, globals.retryInterval, self, globals.Protocol.MDNS);
     });
 
-    this.mdnsRegistry.on('ad-success', function() {
-        console.log('mdns success');
-    });
-
+    // listen for discoveries via MQTT, mDNS, or local storage
     this.mqttRegistry.on('discovery', function(attr, event, nodeId, value) {
         self._respondToDiscoveryEvent(self, attr, event, nodeId, value);
     });
@@ -180,39 +179,6 @@ function Registrar(app, machType, id, port) {
 Registrar.prototype = new EventEmitter();
 
 Registrar.prototype._respondToDiscoveryEvent = function(self, attr, event, nodeId, value) {
-    /*
-    if (event instanceof Object) {
-        // check that value is an object with tag and value fields
-        if (value instanceof Object) {
-            // tag field
-            if (!value.hasOwnProperty('tag')) {
-                throw new Error('value does not have tag field as expected');
-            } else  {
-                if (typeof value.tag != 'string') {
-                    throw new Error('value\'s tag field must be a string');
-                }
-            }
-            // value field
-            if (!value.hasOwnProperty('value')) {
-                throw new Error('value does not have value field as expected');
-            }
-        } else {
-            throw Error('value not an object as expected');
-        }
-
-        // if uncommented, need to go through and fix this
-        if (!self._isDuplicate(self, attr, nodeId, value)) {
-            self._updateDiscoveries(self, attr, nodeId, value);
-            self.emit(event.events[value].tag, nodeId, value.value);
-        }
-    } else {
-        if (!self._isDuplicate(self, attr, nodeId, value)) {
-            self._updateDiscoveries(self, event, nodeId, value);
-            self.emit(event, nodeId, value);
-        }
-    }
-    */
-
     if (!self._isDuplicate(self, attr, nodeId, value)) {
         self._updateDiscoveries(self, attr, nodeId, value);
         self.emit(event, nodeId, value);

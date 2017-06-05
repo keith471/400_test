@@ -188,12 +188,12 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
     */
 
     this.client.on('offline', function () {
-        self.emit('mqtt-error');
+        self.emit('error');
     });
 
     this.client.on('error', function (error) {
         logger.log.error(error);
-        self.emit('mqtt-error');
+        self.emit('error');
     });
 }
 
@@ -208,7 +208,7 @@ MQTTRegistry.prototype._subscribeWithRetries = function(self, subs, retries, cb)
                 // an error here means the node has been unable to subscribe and will therefore
                 // be unresponsive to requests from other nodes. thus, it should NOT publish
                 // its presence on the network
-                self.emit('mqtt-error');
+                self.emit('error');
             } else {
                 setTimeout(self._subscribeWithRetries, constants.mqtt.retryInterval, self, subs, retries - 1, cb);
             }
@@ -236,7 +236,7 @@ MQTTRegistry.prototype._publishWithRetries = function(attrs, retries, self) {
                 logger.log.error(err);
                 if (retries === 0) {
                     // TODO: do we really need to emit an error if one publication is not successful? What if it is not an important publication
-                    self.emit('mqtt-error');
+                    self.emit('error');
                 } else {
                     setTimeout(self._publishWithRetries, constants.mqtt.retryInterval, attrs, retries - 1, self);
                 }

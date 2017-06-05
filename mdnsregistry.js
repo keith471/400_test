@@ -81,7 +81,6 @@ MDNSRegistry.prototype._createAdvertisementWithRetries = function(self, attr, ad
             self._handleError(self, err, ad, attr, adName, details, retries);
         } else {
             self.ads[attr] = ad;
-            self.emit('mdns-ad-success');
         }
     });
     ad.start();
@@ -100,7 +99,7 @@ MDNSRegistry.prototype._handleError = function(self, err, ad, attr, adName, deta
                 logger.log.warning('Exhaused all advertisement retries.');
                 // make sure the add is stopped
                 ad.stop();
-                self.emit('mdns-ad-error');
+                self.emit('error');
             } else {
                 setTimeout(self._createAdvertisementWithRetries, constants.mdns.retryInterval, self, attr, adName, details, retries - 1);
             }
@@ -109,7 +108,7 @@ MDNSRegistry.prototype._handleError = function(self, err, ad, attr, adName, deta
             logger.log.error('Unhandled service error: ' + err + '. Abandoning mDNS.');
             // make sure the add is stopped
             ad.stop();
-            self.emit('mdns-ad-error');
+            self.emit('error');
     }
 }
 
