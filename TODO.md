@@ -4,7 +4,7 @@ Goal: Adapt MQTT, mDNS, and Local Storage to the simplified and uniform form des
 - in a Registry, you need to check if the message received is a status update, and treat these differently. Otherwise, all other discoveries are treated exactly the same: just emit them to the Registrar.
 
 Current Task:
-- adapt MDNS
+- adapt Local Storage
 
 **Improve structure**
 - there's really no need for `custom-discovery` vs. other discovery-related events (e.g. `mqtt-fog-up`)
