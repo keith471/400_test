@@ -267,7 +267,7 @@ MQTTRegistry.prototype._handleMessage = function(self, topic, message) {
         eventName = self.discoverAttributes[machType][attr];
     }
 
-    self.emit('discovery', eventName, machId, message.toString());
+    self.emit('discovery', attr, eventName, machId, message.toString());
 }
 
 /**
