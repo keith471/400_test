@@ -237,9 +237,53 @@ MDNSRegistry.prototype.addAttributes = function(attrs) {
     this._createAdvertisements(attrs);
 }
 
+MDNSRegistry.prototype.removeAttributes = function(attrs) {
+    for (var i = 0; i < attrs.length; i++) {
+        // remove from this.attributes
+        delete this.attributes[attrs[i]];
+        // stop and remove the advertisement
+        this.ads[attrs[i]].stop();
+        delete this.ads[attrs[i]];
+    }
+}
+
 MDNSRegistry.prototype.discoverAttributes = function(dattrs) {
+    for (var key in dattrs.device) {
+        this.discoverAttributes.device[key] = dattrs.device[key];
+    }
+
+    for (var key in dattrs.fog) {
+        this.discoverAttributes.fog[key] = dattrs.fog[key];
+    }
+
+    for (var key in dattrs.cloud) {
+        this.discoverAttributes.cloud[key] = dattrs.cloud[key];
+    }
+
     // TODO: could check that there isn't any crossover between dattrs and this.discoverAttributes
     this._browseForAttributes(dattrs);
+}
+
+MDNSRegistry.prototype.stopDiscoveringAttributes = function(dattrs) {
+    for (var i = 0; i < dattrs.device.length; i++) {
+        // remove from this.discoverAttributes.device
+        delete this.discoverAttributes.device[dattrs.device[i]];
+        // stop and remove the browser
+        this.browsers.device[dattrs.device[i]].stop();
+        delete this.browsers.device[dattrs.device[i]];
+    }
+
+    for (var i = 0; i < dattrs.fog.length; i++) {
+        delete this.discoverAttributes.fog[dattrs.fog[i]];
+        this.browsers.fog[dattrs.fog[i]].stop();
+        delete this.browsers.fog[dattrs.fog[i]];
+    }
+
+    for (var i = 0; i < dattrs.cloud.length; i++) {
+        delete this.discoverAttributes.cloud[dattrs.cloud[i]];
+        this.browsers.cloud[dattrs.cloud[i]].stop();
+        delete this.browsers.cloud[dattrs.cloud[i]];
+    }
 }
 
 /**

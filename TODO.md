@@ -17,12 +17,10 @@
 **LocalRegistry**
 
 **MDNSRegistry**
-*Add support for removing attributes and ceasing to discover attributes*
 
 **MQTTRegistry**
 *Add support for removing attributes and ceasing to discover attributes*
 
 **Registrar**
-*Add support for removing attributes and ceasing to discover attributes*
 
 - Contact mDNS guy regarding 15 character service type limitation
