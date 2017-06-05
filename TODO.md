@@ -1,11 +1,10 @@
 # TODO
 
-Next: Adapt MQTT, mDNS, and Local Storage to the simplified and uniform form described below
-- make sure mqtt always republishes status when registerAndDiscover is called
-- adapt addAttribute to be able to take a function that returns the attribute value and is to be executed directly before publishing the attribute (allows for the user to pass attributes that can be updated dynamically)
-    - write it to work for ip address updates!
-
+Goal: Adapt MQTT, mDNS, and Local Storage to the simplified and uniform form described below
 - in a Registry, you need to check if the message received is a status update, and treat these differently. Otherwise, all other discoveries are treated exactly the same: just emit them to the Registrar.
+
+Current Task:
+- adapt MDNS
 
 **Improve structure**
 - there's really no need for `custom-discovery` vs. other discovery-related events (e.g. `mqtt-fog-up`)

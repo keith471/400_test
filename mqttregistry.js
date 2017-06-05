@@ -33,12 +33,21 @@ MQTTRegistry.prototype = new Registry();
 MQTTRegistry.prototype.registerAndDiscover = function(options) {
     // collect old vs. new subscriptions and attributes
     var oldAttrs = {};
+    var oldSubs = {};
+    var newAttrs = null;
+    var newSubs = null;
 
     for (var key in this.attributes) {
+        // ensure that we republish any attributes determined by a function, for example, status
+        if (this.attributes[key] instanceof Function) {
+            if (newAttrs === null) {
+                newAttrs = {};
+            }
+            newAttrs[key] = this.attributes[key];
+        }
         oldAttrs[key] = this.attributes[key];
     }
 
-    var oldSubs = {};
 
     for (var key in this.discoverAttributes.device) {
         oldSubs[this.app + '/device/+/' + key] = 1;
@@ -52,13 +61,13 @@ MQTTRegistry.prototype.registerAndDiscover = function(options) {
         oldSubs[this.app + '/cloud/+/' + key] = 1;
     }
 
-    var newAttrs = null;
-    var newSubs = null;
     if (options !== undefined) {
         // parse options
         // attributes
         for (var key in options.attributes) {
+            // add to this.attributes
             this.attributes[key] = options.attributes[key];
+            // add to newAttrs
             if (newAttrs === null) {
                 newAttrs = {};
             }
@@ -67,7 +76,9 @@ MQTTRegistry.prototype.registerAndDiscover = function(options) {
 
         // discoverAttributes
         for (var key in options.discoverAttributes.device) {
+            // add to this.discoverAttributes
             this.discoverAttributes.device[key] = options.discoverAttributes.device[key];
+            // add to newSubs
             if (newSubs === null) {
                 newSubs = {};
             }
@@ -129,7 +140,7 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
                     oldSubs[key] = newSubs[key];
                 }
             }
-            self._subscribeWithRetries(oldSubs, constants.mqtt.retries, self, function(granted) {
+            self._subscribeWithRetries(self, oldSubs, constants.mqtt.retries, function(granted) {
                 logger.log.info(self.machType + ' ' + self.id + ' subscribed to ' + JSON.stringify(granted));
                 // make publications
                 if (newAttrs !== null) {
@@ -144,7 +155,7 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
             // our connection is already present, meaning that the broker is still aware of our old subscriptions
             // so, we just make the new ones and then publish the new attrs (or at the very least, an online status)
             if (newSubs !== null) {
-                self._subscribeWithRetries(newSubs, constants.mqtt.retries, self, function(granted) {
+                self._subscribeWithRetries(self, newSubs, constants.mqtt.retries, function(granted) {
                     logger.log.info(self.machType + ' ' + self.id + ' subscribed to ' + JSON.stringify(granted));
                     // make publications
                     if (newAttrs === null) {
@@ -189,7 +200,7 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
 /**
  * Helper for setting up subscriptions to the broker with retries
  */
-MQTTRegistry.prototype._subscribeWithRetries = function(subs, retries, self, cb) {
+MQTTRegistry.prototype._subscribeWithRetries = function(self, subs, retries, cb) {
     self.client.subscribe(subs, function (err, granted) {
         if (err) {
             logger.log.error(err);
@@ -199,10 +210,12 @@ MQTTRegistry.prototype._subscribeWithRetries = function(subs, retries, self, cb)
                 // its presence on the network
                 self.emit('mqtt-error');
             } else {
-                setTimeout(self._subscribeWithRetries, constants.mqtt.retryInterval, subs, retries - 1, self, cb);
+                setTimeout(self._subscribeWithRetries, constants.mqtt.retryInterval, self, subs, retries - 1, cb);
             }
         } else {
-            cb(granted);
+            if (cb !== undefined) {
+                cb(granted);
+            }
         }
     });
 }
@@ -332,59 +345,29 @@ MQTTRegistry.prototype.discoverAttributes = function(attrs) {
     for (var key in attrs.device) {
         isEmpty = false;
         this.discoverAttributes.device[key] = attrs.device[key];
-        subs[this.app + '/device/+/' + key] = 1;
+        subs[this.app + '/device/+/' + key] = this.subQos;
     }
 
     for (var key in attrs.fog) {
         isEmpty = false;
         this.discoverAttributes.fog[key] = attrs.fog[key];
-        subs[this.app + '/fog/+/' + key] = 1;
+        subs[this.app + '/fog/+/' + key] = this.subQos;
     }
 
     for (var key in attrs.cloud) {
         isEmpty = false;
         this.discoverAttributes.cloud[key] = attrs.cloud[key];
-        subs[this.app + '/cloud/+/' + key] = 1;
+        subs[this.app + '/cloud/+/' + key] = this.subQos;
     }
 
     // if the client is currently connected to the broker, then subscribe to the attrs
     // otherwise, we can wait and we will subscribe to them next time the client connects to
     // the broker
     if (!isEmpty && this.client.connected) {
-        this.client.subscribe(subs, function (err, granted) {
-            if (err) {
-                logger.log(err);
-                return;
-            }
+        this._subscribeWithRetries(this, subs, constants.mqtt.retries, function(granted) {
             logger.log(granted);
         });
     }
-}
-
-/**
- * Add a subscription. All custom subscriptions have tags: the name of the event
- * that will be emitted in association with the subscription
- */
-MQTTRegistry.prototype.discoverAttribute = function(topic, qos, emitTag) {
-    // check that the topic is valid
-    if (!regGen.isValidTopic(topic)) {
-        logger.log.info('User defined topic with invalid topic name: ' + topic);
-        throw new Error('invalid topic: ' + topic);
-    }
-
-    // check the validity of qos
-    if (qos < 0 || qos > 2) {
-        logger.log.info('User defined topic with invalid qos: ' + qos);
-        throw new Error('invalid qos: ' + qos);
-    }
-    this.subs.push({
-        isUserDefined: true,
-        topic: topic,
-        regex: regGen.getRegex(topic),
-        qos: qos,
-        emitTag: emitTag,
-        exec: null
-    });
 }
 
 /**
