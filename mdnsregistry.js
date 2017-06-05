@@ -19,9 +19,31 @@ function MDNSRegistry(app, machType, id, port) {
 /* MDNSRegistry inherits from Registry */
 MDNSRegistry.prototype = new Registry();
 
-MDNSRegistry.prototype.registerAndDiscover = function() {
-    this._createAdvertisement();
-    this._browse();
+MDNSRegistry.prototype.registerAndDiscover = function(options) {
+    // add any new attributes or desired discoveries to the existing ones
+    if (options !== undefined) {
+        // parse options
+        // attributes
+        for (var key in options.attributes) {
+            this.attributes[key] = options.attributes[key];
+        }
+
+        // discoverAttributes
+        for (var key in options.discoverAttributes.device) {
+            this.discoverAttributes.device[key] = options.discoverAttributes.device[key];
+        }
+
+        for (var key in options.discoverAttributes.fog) {
+            this.discoverAttributes.fog[key] = options.discoverAttributes.fog[key];
+        }
+
+        for (var key in options.discoverAttributes.cloud) {
+            this.discoverAttributes.cloud[key] = options.discoverAttributes.cloud[key];
+        }
+    }
+
+    this._createAdvertisements(this.attributes);
+    this._browseForAttributes(this.discoverAttributes);
 }
 
 //------------------------------------------------------------------------------
@@ -29,24 +51,36 @@ MDNSRegistry.prototype.registerAndDiscover = function() {
 //------------------------------------------------------------------------------
 
 /**
- * Attempts to create an mDNS advertisement
+ * Creates advertisements for the provided attributes
  */
-MDNSRegistry.prototype._createAdvertisement = function() {
-    if (this.machType === constants.globals.NodeType.DEVICE) {
-        return;
+MDNSRegistry.prototype._createAdvertisements = function(attrs) {
+    for (var key in attrs) {
+        var adName = this.app + '-' + this.machType + '-' + key;
+        var details;
+        if (attrs[key] instanceof Function) {
+            details = JSON.stringify({
+                id: this.id,
+                msg: attrs[key]()
+            });
+        } else {
+            details = JSON.stringify({
+                id: this.id,
+                msg: attrs[key]
+            });
+        }
+        this._createAdvertisementWithRetries(this, key, adName, details, constants.mdns.retries);
     }
-    this._createAdvertisementWithName(this.app + '-' + this.machType, constants.mdns.retries, this);
 }
 
 /**
  * Helper
  */
-MDNSRegistry.prototype._createAdvertisementWithName = function(name, retries, self) {
-    var ad = mdns.createAdvertisement(mdns.tcp(name), self.port, {name: self.id}, function(err, service) {
+MDNSRegistry.prototype._createAdvertisementWithRetries = function(self, attr, adName, details, retries) {
+    var ad = mdns.createAdvertisement(mdns.tcp(adName), self.port, {name: details}, function(err, service) {
         if (err) {
-            self._handleError(err, ad, name, retries, self);
+            self._handleError(self, err, ad, attr, adName, details, retries);
         } else {
-            self.ads[name] = ad;
+            self.ads[attr] = ad;
             self.emit('mdns-ad-success');
         }
     });
@@ -56,7 +90,7 @@ MDNSRegistry.prototype._createAdvertisementWithName = function(name, retries, se
 /**
  * helper function for handling advertisement errors
  */
-MDNSRegistry.prototype._handleError = function(err, ad, name, retries, self) {
+MDNSRegistry.prototype._handleError = function(self, err, ad, attr, adName, details, retries) {
     switch (err.errorCode) {
         // if the error is unknown, then the mdns daemon may currently be down,
         // so try again in some number of seconds
@@ -68,7 +102,7 @@ MDNSRegistry.prototype._handleError = function(err, ad, name, retries, self) {
                 ad.stop();
                 self.emit('mdns-ad-error');
             } else {
-                setTimeout(self._createAdvertisementWithName, constants.mdns.retryInterval, name, retries - 1, self);
+                setTimeout(self._createAdvertisementWithRetries, constants.mdns.retryInterval, self, attr, adName, details, retries - 1);
             }
             break;
         default:
@@ -86,67 +120,91 @@ MDNSRegistry.prototype._handleError = function(err, ad, name, retries, self) {
 /**
  * Browses for services
  */
-MDNSRegistry.prototype._browse = function() {
-    var channelName = undefined;
-    if (this.machType === constants.globals.NodeType.DEVICE) {
-        channelName = this.app + '-' + constants.globals.NodeType.FOG;
-    } else if (this.machType === constants.globals.NodeType.FOG) {
-        channelName = this.app + '-' + constants.globals.NodeType.CLOUD;
+MDNSRegistry.prototype._browseForAttributes = function(dattrs) {
+    for (var attr in dattrs.device) {
+        if (attr === 'status') {
+            this._browseForStatus(constants.globals.NodeType.DEVICE, dattrs.device.status);
+        } else {
+            this._browse(attr, constants.globals.NodeType.DEVICE, dattrs.device[attr]);
+        }
     }
-    if (channelName !== undefined) {
-        this._browseForChannelWithName(channelName);
+
+    for (var attr in dattrs.fog) {
+        if (attr === 'status') {
+            this._browseForStatus(constants.globals.NodeType.FOG, dattrs.fog.status);
+        } else {
+            this._browse(attr, constants.globals.NodeType.FOG, dattrs.fog[attr]);
+        }
+    }
+
+    for (var attr in dattrs.cloud) {
+        if (attr === 'status') {
+            this._browseForStatus(constants.globals.NodeType.CLOUD, dattrs.cloud.status);
+        } else {
+            this._browse(attr, constants.globals.NodeType.CLOUD, dattrs.cloud[attr]);
+        }
     }
 }
 
-MDNSRegistry.prototype._browseForChannelWithName = function(name) {
-    var browser = mdns.createBrowser(mdns.tcp(name));
-    this.browsers[name] = browser;
+/**
+ * Prep a browser to browse for any attibute except for status
+ */
+MDNSRegistry.prototype._browse = function(attr, machType, event) {
+    var browser = mdns.createBrowser(mdns.tcp(this.app + '-' + machType + '-' + attr));
+
+    this.browsers[machType][attr] = browser;
 
     var self = this;
-    browser.on('serviceUp', function(service) {
-        // ignore our own services
-        if (service.name === self.id) {
-            return;
-        }
-        // emit the id, port, and IP address of the fog to the rest of the application
-        var retVal = self._getServiceData(service);
-        if (retVal === null) {
-            return;
-        }
-        if (self.machType === constants.globals.NodeType.DEVICE) {
-            self.emit('mdns-fog-up', retVal);
-        } else if (self.machType === constants.globals.NodeType.FOG) {
-            self.emit('mdns-cloud-up', retVal);
-        }
-    });
 
-    browser.on('serviceDown', function(service) {
-        if (self.machType === constants.globals.NodeType.DEVICE) {
-            self.emit('mdns-fog-down', service.name);
-        } else if (self.machType === constants.globals.NodeType.FOG) {
-            self.emit('mdns-cloud-down', service.name);
+    browser.on('serviceUp', function(service) {
+        var details = JSON.parse(service.name);
+
+        // ignore our own services
+        if (details.id == self.id) {
+            return;
         }
+
+        // emit a discovery event!
+        self.emit('discovery', attr, event, details.id, details.msg);
     });
 
     browser.start();
 }
 
-MDNSRegistry.prototype._getServiceData = function(service) {
-    var ip = this._getIp(service.addresses);
-    // possible that _getIp returns null
-    if (ip === null) {
-        return null;
-    }
-    return {
-        id: service.name, // string
-        port: service.port, // int
-        ip: ip // string
-    };
+/**
+ * Prep a browser to browse for the status attribute
+ */
+MDNSRegistry.prototype._browseForStatus = function(machType, events) {
+    var browser = mdns.createBrowser(mdns.tcp(this.app + '-' + machType + '-status'));
+
+    this.browsers[machType].status = browser;
+
+    var self = this;
+
+    browser.on('serviceUp', function(service) {
+        var details = JSON.parse(service.name);
+
+        // ignore our own services
+        if (details.id == self.id) {
+            return;
+        }
+
+        // emit a node online event!
+        self.emit('discovery', 'status', events.online, details.id, details.msg);
+    });
+
+    browser.on('serviceDown', function(service) {
+        var details = JSON.parse(service.name);
+        self.emit('discovery', 'status', events.offline, details.id, 'offline');
+    });
+
+    browser.start();
 }
 
 /**
- * Parses and returns an IPv4 address from an array of addresses
+ * Parses and returns an IPv4 address from an array of addresses (that can be parsed from an MDNS advertisement)
  */
+/*
 MDNSRegistry.prototype._getIp = function(addresses) {
     for (var i = 0; i < addresses.length; i++) {
         var parts = addresses[i].split('.');
@@ -165,17 +223,47 @@ MDNSRegistry.prototype._getIp = function(addresses) {
     }
     return null;
 }
+*/
+
+//==============================================================================
+// Add and discover attributes
+//==============================================================================
+
+MDNSRegistry.prototype.addAttributes = function(attrs) {
+    for (var attr in attrs) {
+        this.attributes[attr] = attrs[attr];
+    }
+
+    // TODO: could check that there isn't any crossover between attrs and this.attributes
+    this._createAdvertisements(attrs);
+}
+
+MDNSRegistry.prototype.discoverAttributes = function(dattrs) {
+    // TODO: could check that there isn't any crossover between dattrs and this.discoverAttributes
+    this._browseForAttributes(dattrs);
+}
 
 /**
  * mDNS cleanup
  * stops all advertising and browsing
  */
 MDNSRegistry.prototype.quit = function() {
-    for (var name in this.ads) {
-        this.ads[name].stop();
+    // stop ads
+    for (var attr in this.ads) {
+        this.ads[attr].stop();
     }
-    for (var name in this.browsers) {
-        this.browsers[name].stop();
+
+    // stop browsers
+    for (var attr in this.browsers.device) {
+        this.browsers.device[attr].stop();
+    }
+
+    for (var attr in this.browsers.fog) {
+        this.browsers.fog[attr].stop();
+    }
+
+    for (var attr in this.browsers.cloud) {
+        this.browsers.cloud[attr].stop();
     }
 }
 

@@ -11,9 +11,8 @@ function Registry(ip, port) {
     this.port = port;
 
     // discoverable attributes of the node
-    this.attributes = {
-        status: 'online' // by default, all nodes have the status attribute
-    };
+    this.attributes = {};
+
     // attributes of other nodes that this node is discovering
     this.discoverAttributes = {
         device: {},

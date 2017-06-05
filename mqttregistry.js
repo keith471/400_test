@@ -50,15 +50,15 @@ MQTTRegistry.prototype.registerAndDiscover = function(options) {
 
 
     for (var key in this.discoverAttributes.device) {
-        oldSubs[this.app + '/device/+/' + key] = 1;
+        oldSubs[this.app + '/device/+/' + key] = this.subQos;
     }
 
     for (var key in this.discoverAttributes.fog) {
-        oldSubs[this.app + '/fog/+/' + key] = 1;
+        oldSubs[this.app + '/fog/+/' + key] = this.subQos;
     }
 
     for (var key in this.discoverAttributes.cloud) {
-        oldSubs[this.app + '/cloud/+/' + key] = 1;
+        oldSubs[this.app + '/cloud/+/' + key] = this.subQos;
     }
 
     if (options !== undefined) {
