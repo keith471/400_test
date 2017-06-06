@@ -13,7 +13,11 @@ function MDNSRegistry(app, machType, id, port) {
     this.id = id;
     this.port = port;
     this.ads = {};
-    this.browsers = {};
+    this.browsers = {
+        device: {},
+        fog: {},
+        cloud: {}
+    };
 }
 
 /* MDNSRegistry inherits from Registry */
@@ -28,22 +32,22 @@ MDNSRegistry.prototype.registerAndDiscover = function(options) {
             this.attributes[key] = options.attributes[key];
         }
 
-        // discoverAttributes
-        for (var key in options.discoverAttributes.device) {
-            this.discoverAttributes.device[key] = options.discoverAttributes.device[key];
+        // attributesToDiscover
+        for (var key in options.attributesToDiscover.device) {
+            this.attributesToDiscover.device[key] = options.attributesToDiscover.device[key];
         }
 
-        for (var key in options.discoverAttributes.fog) {
-            this.discoverAttributes.fog[key] = options.discoverAttributes.fog[key];
+        for (var key in options.attributesToDiscover.fog) {
+            this.attributesToDiscover.fog[key] = options.attributesToDiscover.fog[key];
         }
 
-        for (var key in options.discoverAttributes.cloud) {
-            this.discoverAttributes.cloud[key] = options.discoverAttributes.cloud[key];
+        for (var key in options.attributesToDiscover.cloud) {
+            this.attributesToDiscover.cloud[key] = options.attributesToDiscover.cloud[key];
         }
     }
 
     this._createAdvertisements(this.attributes);
-    this._browseForAttributes(this.discoverAttributes);
+    this._browseForAttributes(this.attributesToDiscover);
 }
 
 //------------------------------------------------------------------------------
@@ -249,38 +253,38 @@ MDNSRegistry.prototype.removeAttributes = function(attrs) {
 
 MDNSRegistry.prototype.discoverAttributes = function(dattrs) {
     for (var key in dattrs.device) {
-        this.discoverAttributes.device[key] = dattrs.device[key];
+        this.attributesToDiscover.device[key] = dattrs.device[key];
     }
 
     for (var key in dattrs.fog) {
-        this.discoverAttributes.fog[key] = dattrs.fog[key];
+        this.attributesToDiscover.fog[key] = dattrs.fog[key];
     }
 
     for (var key in dattrs.cloud) {
-        this.discoverAttributes.cloud[key] = dattrs.cloud[key];
+        this.attributesToDiscover.cloud[key] = dattrs.cloud[key];
     }
 
-    // TODO: could check that there isn't any crossover between dattrs and this.discoverAttributes
+    // TODO: could check that there isn't any crossover between dattrs and this.attributesToDiscover
     this._browseForAttributes(dattrs);
 }
 
 MDNSRegistry.prototype.stopDiscoveringAttributes = function(dattrs) {
     for (var i = 0; i < dattrs.device.length; i++) {
-        // remove from this.discoverAttributes.device
-        delete this.discoverAttributes.device[dattrs.device[i]];
+        // remove from this.attributesToDiscover.device
+        delete this.attributesToDiscover.device[dattrs.device[i]];
         // stop and remove the browser
         this.browsers.device[dattrs.device[i]].stop();
         delete this.browsers.device[dattrs.device[i]];
     }
 
     for (var i = 0; i < dattrs.fog.length; i++) {
-        delete this.discoverAttributes.fog[dattrs.fog[i]];
+        delete this.attributesToDiscover.fog[dattrs.fog[i]];
         this.browsers.fog[dattrs.fog[i]].stop();
         delete this.browsers.fog[dattrs.fog[i]];
     }
 
     for (var i = 0; i < dattrs.cloud.length; i++) {
-        delete this.discoverAttributes.cloud[dattrs.cloud[i]];
+        delete this.attributesToDiscover.cloud[dattrs.cloud[i]];
         this.browsers.cloud[dattrs.cloud[i]].stop();
         delete this.browsers.cloud[dattrs.cloud[i]];
     }

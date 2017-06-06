@@ -48,15 +48,15 @@ MQTTRegistry.prototype.registerAndDiscover = function(options) {
     }
 
 
-    for (var key in this.discoverAttributes.device) {
+    for (var key in this.attributesToDiscover.device) {
         oldSubs[this.app + '/device/+/' + key] = this.subQos;
     }
 
-    for (var key in this.discoverAttributes.fog) {
+    for (var key in this.attributesToDiscover.fog) {
         oldSubs[this.app + '/fog/+/' + key] = this.subQos;
     }
 
-    for (var key in this.discoverAttributes.cloud) {
+    for (var key in this.attributesToDiscover.cloud) {
         oldSubs[this.app + '/cloud/+/' + key] = this.subQos;
     }
 
@@ -73,10 +73,10 @@ MQTTRegistry.prototype.registerAndDiscover = function(options) {
             newAttrs[key] = options.attributes[key];
         }
 
-        // discoverAttributes
-        for (var key in options.discoverAttributes.device) {
-            // add to this.discoverAttributes
-            this.discoverAttributes.device[key] = options.discoverAttributes.device[key];
+        // attributesToDiscover
+        for (var key in options.attributesToDiscover.device) {
+            // add to this.attributesToDiscover
+            this.attributesToDiscover.device[key] = options.attributesToDiscover.device[key];
             // add to newSubs
             if (newSubs === null) {
                 newSubs = {};
@@ -84,16 +84,16 @@ MQTTRegistry.prototype.registerAndDiscover = function(options) {
             newSubs[this.app + '/device/+/' + key] = this.subQos;
         }
 
-        for (var key in options.discoverAttributes.fog) {
-            this.discoverAttributes.fog[key] = options.discoverAttributes.fog[key];
+        for (var key in options.attributesToDiscover.fog) {
+            this.attributesToDiscover.fog[key] = options.attributesToDiscover.fog[key];
             if (newSubs === null) {
                 newSubs = {};
             }
             newSubs[this.app + '/fog/+/' + key] = this.subQos;
         }
 
-        for (var key in options.discoverAttributes.cloud) {
-            this.discoverAttributes.cloud[key] = options.discoverAttributes.cloud[key];
+        for (var key in options.attributesToDiscover.cloud) {
+            this.attributesToDiscover.cloud[key] = options.attributesToDiscover.cloud[key];
             if (newSubs === null) {
                 newSubs = {};
             }
@@ -307,12 +307,12 @@ MQTTRegistry.prototype._handleMessage = function(self, topic, message) {
     var eventName;
     if (attr === 'status') {
         if (message === 'offline') {
-            eventName = self.discoverAttributes[machType].status.offline;
+            eventName = self.attributesToDiscover[machType].status.offline;
         } else {
-            eventName = self.discoverAttributes[machType].status.online;
+            eventName = self.attributesToDiscover[machType].status.online;
         }
     } else {
-        eventName = self.discoverAttributes[machType][attr];
+        eventName = self.attributesToDiscover[machType][attr];
     }
 
     self.emit('discovery', attr, eventName, machId, message);
@@ -405,19 +405,19 @@ MQTTRegistry.prototype.discoverAttributes = function(attrs) {
     var isEmpty = true;
     for (var key in attrs.device) {
         isEmpty = false;
-        this.discoverAttributes.device[key] = attrs.device[key];
+        this.attributesToDiscover.device[key] = attrs.device[key];
         subs[this.app + '/device/+/' + key] = this.subQos;
     }
 
     for (var key in attrs.fog) {
         isEmpty = false;
-        this.discoverAttributes.fog[key] = attrs.fog[key];
+        this.attributesToDiscover.fog[key] = attrs.fog[key];
         subs[this.app + '/fog/+/' + key] = this.subQos;
     }
 
     for (var key in attrs.cloud) {
         isEmpty = false;
-        this.discoverAttributes.cloud[key] = attrs.cloud[key];
+        this.attributesToDiscover.cloud[key] = attrs.cloud[key];
         subs[this.app + '/cloud/+/' + key] = this.subQos;
     }
 
@@ -434,17 +434,17 @@ MQTTRegistry.prototype.discoverAttributes = function(attrs) {
 MQTTRegistry.prototype.stopDiscoveringAttributes = function(dattrs) {
     var topics = [];
     for (var i = 0; i < dattrs.device.length; i++) {
-        delete this.discoverAttributes.device[dattrs.device[i]];
+        delete this.attributesToDiscover.device[dattrs.device[i]];
         topics.push(this.app + '/device/+/' + dattrs.device[i]);
     }
 
     for (var i = 0; i < dattrs.fog.length; i++) {
-        delete this.discoverAttributes.fog[dattrs.fog[i]];
+        delete this.attributesToDiscover.fog[dattrs.fog[i]];
         topics.push(this.app + '/fog/+/' + dattrs.fog[i]);
     }
 
     for (var i = 0; i < dattrs.cloud.length; i++) {
-        delete this.discoverAttributes.cloud[dattrs.cloud[i]];
+        delete this.attributesToDiscover.cloud[dattrs.cloud[i]];
         topics.push(this.app + '/cloud/+/' + dattrs.cloud[i]);
     }
 

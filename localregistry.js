@@ -29,8 +29,6 @@ function LocalRegistry(app, machType, id, port) {
     this.attrsToAdd = {};
     // list of attributes to be removed the next time we check-in
     this.attrsToRemove = [];
-    // boolean to keep track of whether register and discover has already been called
-    this.registerAndDiscoverCalled = false;
 }
 
 /* LocalRegistry inherits from Registry */
@@ -38,16 +36,10 @@ LocalRegistry.prototype = new Registry();
 
 /**
  * API for local storage registration/discovery
- * This function should only ever be called once, just to avoid reinitialization of this.localStorage
+ * TODO: This function should only ever be called once, just to avoid reinitialization of this.localStorage
  * (though I don't think reinitialization would cause any issues...)
  */
 LocalRegistry.prototype.registerAndDiscover = function(options) {
-
-    if (registerAndDiscoverCalled) {
-        return;
-    }
-    registerAndDiscoverCalled = true;
-
     if (options !== undefined) {
         // parse options
         // attributes
@@ -55,17 +47,17 @@ LocalRegistry.prototype.registerAndDiscover = function(options) {
             this.attributes[key] = options.attributes[key];
         }
 
-        // discoverAttributes
-        for (var key in options.discoverAttributes.device) {
-            this.discoverAttributes.device[key] = options.discoverAttributes.device[key];
+        // attributesToDiscover
+        for (var key in options.attributesToDiscover.device) {
+            this.attributesToDiscover.device[key] = options.attributesToDiscover.device[key];
         }
 
-        for (var key in options.discoverAttributes.fog) {
-            this.discoverAttributes.fog[key] = options.discoverAttributes.fog[key];
+        for (var key in options.attributesToDiscover.fog) {
+            this.attributesToDiscover.fog[key] = options.attributesToDiscover.fog[key];
         }
 
-        for (var key in options.discoverAttributes.cloud) {
-            this.discoverAttributes.cloud[key] = options.discoverAttributes.cloud[key];
+        for (var key in options.attributesToDiscover.cloud) {
+            this.attributesToDiscover.cloud[key] = options.attributesToDiscover.cloud[key];
         }
     }
 
@@ -209,35 +201,35 @@ LocalRegistry.prototype._scan = function(self) {
     var baseName;
     var machs;
 
-    if (Object.keys(self.discoverAttributes.device).length !== 0) {
+    if (Object.keys(self.attributesToDiscover.device).length !== 0) {
         baseName = 'devices_';
         for (var i = 0; i < constants.localStorage.numBins; i++) {
             binName = baseName + i;
             machs = JSON.parse(self.localStorage.getItem(binName));
-            self._makeDiscoveries(machs, self.discoverAttributes.device);
+            self._makeDiscoveries(self, machs, self.attributesToDiscover.device);
         }
     }
 
-    if (Object.keys(self.discoverAttributes.fog).length !== 0) {
+    if (Object.keys(self.attributesToDiscover.fog).length !== 0) {
         baseName = 'fogs_';
         for (var i = 0; i < constants.localStorage.numBins; i++) {
             binName = baseName + i;
             machs = JSON.parse(self.localStorage.getItem(binName));
-            self._makeDiscoveries(machs, self.discoverAttributes.fog);
+            self._makeDiscoveries(self, machs, self.attributesToDiscover.fog);
         }
     }
 
-    if (Object.keys(self.discoverAttributes.cloud).length !== 0) {
+    if (Object.keys(self.attributesToDiscover.cloud).length !== 0) {
         baseName = 'clouds_';
         for (var i = 0; i < constants.localStorage.numBins; i++) {
             binName = baseName + i;
             machs = JSON.parse(self.localStorage.getItem(binName));
-            self._makeDiscoveries(machs, self.discoverAttributes.cloud);
+            self._makeDiscoveries(self, machs, self.attributesToDiscover.cloud);
         }
     }
 }
 
-LocalRegistry.prototype._makeDiscoveries = function(machs, dattrs) {
+LocalRegistry.prototype._makeDiscoveries = function(self, machs, dattrs) {
     // only the machs that are newly online are of interest to us, unless we are interested in node status,
     // in which case newly offline nodes are also of interest
     var now = Date.now();
@@ -335,15 +327,15 @@ LocalRegistry.prototype._removeAttributesWithRetry = function(attrs, attemptNumb
  */
 LocalRegistry.prototype.discoverAttributes = function(dattrs) {
     for (var key in dattrs.device) {
-        this.discoverAttributes.device[key] = dattrs.device[key];
+        this.attributesToDiscover.device[key] = dattrs.device[key];
     }
 
     for (var key in dattrs.fog) {
-        this.discoverAttributes.fog[key] = dattrs.fog[key];
+        this.attributesToDiscover.fog[key] = dattrs.fog[key];
     }
 
     for (var key in dattrs.cloud) {
-        this.discoverAttributes.cloud[key] = dattrs.cloud[key];
+        this.attributesToDiscover.cloud[key] = dattrs.cloud[key];
     }
 }
 
@@ -352,15 +344,15 @@ LocalRegistry.prototype.discoverAttributes = function(dattrs) {
  */
 LocalRegistry.prototype.stopDiscoveringAttributes = function(dattrs) {
     for (var i = 0; i < dattrs.device.length; i++) {
-        delete this.discoverAttributes.device[dattrs.device[i]];
+        delete this.attributesToDiscover.device[dattrs.device[i]];
     }
 
     for (var i = 0; i < dattrs.fog.length; i++) {
-        delete this.discoverAttributes.fog[dattrs.fog[i]];
+        delete this.attributesToDiscover.fog[dattrs.fog[i]];
     }
 
     for (var i = 0; i < dattrs.cloud.length; i++) {
-        delete this.discoverAttributes.cloud[dattrs.cloud[i]];
+        delete this.attributesToDiscover.cloud[dattrs.cloud[i]];
     }
 }
 

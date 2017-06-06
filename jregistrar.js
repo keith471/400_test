@@ -3,7 +3,7 @@ var EventEmitter = require('events'),
     MQTTRegistry = require('./mqttregistry'),
     MDNSRegistry = require('./mdnsregistry'),
     LocalRegistry = require('./localregistry'),
-    Registry = require('./registry');
+    os = require('os');
 
 //==============================================================================
 // Helpers
@@ -70,6 +70,21 @@ function equivalentObjects(a, b) {
     return true;
 }
 
+/**
+ * returns the IPv4 address of the node
+ */
+function getIPv4Address() {
+    var niaddrs = os.networkInterfaces();
+    for (var ni in niaddrs) {
+        nielm = niaddrs[ni];
+        for (n in nielm) {
+            if (nielm[n].family === 'IPv4' && nielm[n].internal === false)
+                return nielm[n].address
+        }
+    }
+    return globals.localhost;
+}
+
 //==============================================================================
 // Registrar Class
 // This Class is the interface between the application and the MQTT, mDNS, and
@@ -98,7 +113,7 @@ function Registrar(app, machType, id, port) {
         status: function() {
             return {
                 port: port,
-                ip: Registry.getIPv4Address()
+                ip: getIPv4Address()
             };
         }
     };
@@ -147,6 +162,7 @@ function Registrar(app, machType, id, port) {
 
     // listen for mqtt errors
     this.mqttRegistry.on('error', function() {
+        console.log('mqtt error');
         // mqtt cleanup
         self.mqttRegistry.quit(function() {
             setTimeout(self._retry, globals.retryInterval, self, globals.Protocol.MQTT);
@@ -155,6 +171,7 @@ function Registrar(app, machType, id, port) {
 
     // listen for mdns errors
     this.mdnsRegistry.on('error', function() {
+        console.log('mdns error');
         // mdns cleanup
         self.mdnsRegistry.quit();
         setTimeout(self._retry, globals.retryInterval, self, globals.Protocol.MDNS);
@@ -241,7 +258,7 @@ Registrar.prototype._retry = function(self, protocol) {
     if (protocol === globals.Protocol.MQTT) {
         console.log('retrying mqtt');
         self.mqttRegistry.registerAndDiscover();
-    } else if (protocol === gloabals.Protocol.MDNS) {
+    } else if (protocol === globals.Protocol.MDNS) {
         console.log('retrying mdns');
         self.mdnsRegistry.registerAndDiscover();
     }
