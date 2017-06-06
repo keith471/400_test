@@ -5,10 +5,11 @@
 var EventEmitter = require('events').EventEmitter,
     constants = require('./constants');
 
-function Registry(ip, port) {
-    this.ip = ip;
+function Registry(app, machType, id, port) {
+    this.app = app;
+    this.machType = machType;
+    this.id = id;
     this.port = port;
-
     // discoverable attributes of the node
     this.attributes = {};
 
@@ -21,14 +22,8 @@ function Registry(ip, port) {
 }
 
 /* Registry inherits from EventEmitter */
-Registry.prototype = new EventEmitter();
-
-/**
- * returns the url the node can be accessed on
- */
-Registry.prototype.getUrl = function() {
-    return 'tcp://' + this.ip + ':' + this.port;
-}
+Registry.prototype = Object.create(EventEmitter.prototype);
+Registry.prototype.constructor = Registry;
 
 /* exports */
 module.exports = Registry;

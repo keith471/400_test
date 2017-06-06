@@ -3,7 +3,8 @@ var EventEmitter = require('events'),
     MQTTRegistry = require('./mqttregistry'),
     MDNSRegistry = require('./mdnsregistry'),
     LocalRegistry = require('./localregistry'),
-    os = require('os');
+    os = require('os'),
+    Registry = require('./registry');
 
 //==============================================================================
 // Helpers
@@ -99,6 +100,10 @@ function Registrar(app, machType, id, port) {
     this.mqttRegistry = new MQTTRegistry(app, machType, id, port);
     this.mdnsRegistry = new MDNSRegistry(app, machType, id, port);
     this.localRegistry = new LocalRegistry(app, machType, id, port);
+
+    console.log(MQTTRegistry.prototype.constructor);
+    console.log(MDNSRegistry.prototype.constructor);
+    console.log(LocalRegistry.prototype.constructor);
 
     // store discoveries here so that we can easily check for duplicates
     this.discoveries = {};
@@ -456,6 +461,10 @@ Registrar.prototype._checkAttributes = function(attrs) {
             throw new Error('the attribute \'' + this.reservedAttrs[i] + '\' is reserved');
         }
     }
+}
+
+Registrar.prototype.getUrl = function() {
+    return 'tcp://' + getIPv4Address() + ':' + this.port;
 }
 
 /* exports */

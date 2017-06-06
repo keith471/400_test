@@ -12,10 +12,7 @@ var LocalStorage = require('node-localstorage').LocalStorage,
 /* create an mDNS advertisement on the local network */
 
 function LocalRegistry(app, machType, id, port) {
-    this.app = app;
-    this.machType = machType;
-    this.id = id;
-    this.port = port;
+    Registry.call(this, app, machType, id, port);
     this.localStorage = null;
     this.binName = this._getBinName();
     // put the 'app' as a hidden directory in user's home
@@ -32,7 +29,9 @@ function LocalRegistry(app, machType, id, port) {
 }
 
 /* LocalRegistry inherits from Registry */
-LocalRegistry.prototype = new Registry();
+//LocalRegistry.prototype = new Registry();
+LocalRegistry.prototype = Object.create(Registry.prototype);
+LocalRegistry.prototype.constructor = LocalRegistry;
 
 /**
  * API for local storage registration/discovery

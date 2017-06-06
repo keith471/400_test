@@ -8,10 +8,7 @@ var mdns = require('./mdns/lib/mdns'),
     Registry = require('./registry');
 
 function MDNSRegistry(app, machType, id, port) {
-    this.app = app;
-    this.machType = machType;
-    this.id = id;
-    this.port = port;
+    Registry.call(this, app, machType, id, port);
     this.ads = {};
     this.browsers = {
         device: {},
@@ -21,7 +18,9 @@ function MDNSRegistry(app, machType, id, port) {
 }
 
 /* MDNSRegistry inherits from Registry */
-MDNSRegistry.prototype = new Registry();
+//MDNSRegistry.prototype = new Registry();
+MDNSRegistry.prototype = Object.create(Registry.prototype);
+MDNSRegistry.prototype.constructor = MDNSRegistry;
 
 MDNSRegistry.prototype.registerAndDiscover = function(options) {
     // add any new attributes or desired discoveries to the existing ones
@@ -94,6 +93,7 @@ MDNSRegistry.prototype._createAdvertisementWithRetries = function(self, attr, ad
  * helper function for handling advertisement errors
  */
 MDNSRegistry.prototype._handleError = function(self, err, ad, attr, adName, details, retries) {
+    console.log('err: ' + err);
     switch (err.errorCode) {
         // if the error is unknown, then the mdns daemon may currently be down,
         // so try again in some number of seconds
@@ -101,7 +101,7 @@ MDNSRegistry.prototype._handleError = function(self, err, ad, attr, adName, deta
             logger.log.error('Unknown service error: ' + err);
             if (retries === 0) {
                 logger.log.warning('Exhaused all advertisement retries.');
-                // make sure the add is stopped
+                // make sure the ad is stopped
                 ad.stop();
                 self.emit('error');
             } else {
@@ -110,7 +110,7 @@ MDNSRegistry.prototype._handleError = function(self, err, ad, attr, adName, deta
             break;
         default:
             logger.log.error('Unhandled service error: ' + err + '. Abandoning mDNS.');
-            // make sure the add is stopped
+            // make sure the ad is stopped
             ad.stop();
             self.emit('error');
     }

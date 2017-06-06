@@ -8,10 +8,7 @@ var mqtt = require('mqtt'),
     Registry = require('./registry');
 
 function MQTTRegistry(app, machType, id, port, subQos, pubQos) {
-    this.app = app;
-    this.machType = machType;
-    this.id = id;
-    this.port = port;
+    Registry.call(this, app, machType, id, port);
     // the quality of service to use for subscriptions
     this.subQos = subQos;
     // the quality of service to use for publications
@@ -23,7 +20,9 @@ function MQTTRegistry(app, machType, id, port, subQos, pubQos) {
 }
 
 /* MQTTRegistry inherits from Registry */
-MQTTRegistry.prototype = new Registry();
+//MQTTRegistry.prototype = new Registry();
+MQTTRegistry.prototype = Object.create(Registry.prototype);
+MQTTRegistry.prototype.constructor = MQTTRegistry;
 
 /**
  * Performs basic registration and discovery
