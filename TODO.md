@@ -1,5 +1,7 @@
 # TODO
 
+- TEST!!!
+
 **Improved structure**
 - there is a single discovery event, `discovery`, that all Registries call for any discovery.
 - the parameters to the function called upon receipt of the event should be:
@@ -19,7 +21,6 @@
 **MDNSRegistry**
 
 **MQTTRegistry**
-*Add support for removing attributes and ceasing to discover attributes*
 
 **Registrar**
 

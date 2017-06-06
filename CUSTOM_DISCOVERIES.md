@@ -28,6 +28,7 @@
             }
         }
         ```
+- the value of an attribute should not be null, or it will be ignored
 
 ## Reserved Attributes
 - status: reserved for 'online'/'offline' status announcements (all protocols)

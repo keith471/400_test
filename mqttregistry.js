@@ -17,10 +17,10 @@ function MQTTRegistry(app, machType, id, port, subQos, pubQos) {
     this.subQos = subQos;
     // the quality of service to use for publications
     this.pubQos = pubQos;
-
-    // set up default discoveries here
-    // default attr is status and should be set only when publishing status, in order to keep IP address accurate
-    // actually do this in Regisrar constructor, so the default behavior is all in one place
+    // attributes to remove the next time we connect
+    this.attrsToRemove = {};
+    // topics to unsubscribe from the next time we connect
+    this.topicsToUnsubscribeFrom = [];
 }
 
 /* MQTTRegistry inherits from Registry */
@@ -149,11 +149,13 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
                         oldAttrs[key] = newAttrs[key];
                     }
                 }
-                self._publishWithRetries(oldAttrs, constants.mqtt.retries, self);
+                self._publishWithRetries(self, oldAttrs, constants.mqtt.retries);
             });
         } else {
             // our connection is already present, meaning that the broker is still aware of our old subscriptions
-            // so, we just make the new ones and then publish the new attrs (or at the very least, an online status)
+            // so, we make the new ones and then publish the new attrs (or at the very least, an online status)
+            // we also need to make null publications for any attrsToRemove and
+            // we need to unsubscribe from any topicsToUnsubscribeFrom
             if (newSubs !== null) {
                 self._subscribeWithRetries(self, newSubs, constants.mqtt.retries, function(granted) {
                     logger.log.info(self.machType + ' ' + self.id + ' subscribed to ' + JSON.stringify(granted));
@@ -161,20 +163,37 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
                     if (newAttrs === null) {
                         newAttrs = {};
                     }
-                    self._publishWithRetries(newAttrs, constants.mqtt.retries, self);
+                    self._publishWithRetries(self, newAttrs, constants.mqtt.retries);
+                    // make null publications for any attributes to remove
+                    self._publishWithRetries(self, self.attrsToRemove, constants.mqtt.retries, function(err) {
+                        if (!err) {
+                            // reset attrsToRemove
+                            self.attrsToRemove = {};
+                        }
+                    });
+                    // unsubscribe from things if needed
+                    self._unsubscribe(self, self.topicsToUnsubscribeFrom, function(err) {
+                        if (!err) {
+                            // reset topicsToUnsubscribeFrom
+                            self.topicsToUnsubscribeFrom = [];
+                        }
+                    });
                 });
             } else {
                 if (newAttrs === null) {
                     newAttrs = {};
                 }
-                self._publishWithRetries(newAttrs, constants.mqtt.retries, self);
+                self._publishWithRetries(self, newAttrs, constants.mqtt.retries);
             }
         }
     });
 
     /* message event received when client receives a published packet */
     this.client.on('message', function (topic, message, packet) {
-        self._handleMessage(topic, message);
+        var parsedMsg = JSON.parse(message.toString());
+        if (parsedMsg !== null) {
+            self._handleMessage(self, topic, parsedMsg);
+        }
     });
 
     /*
@@ -221,24 +240,54 @@ MQTTRegistry.prototype._subscribeWithRetries = function(self, subs, retries, cb)
 }
 
 /**
- * Helper for publishing a node's presence on the network
+ * Unsubscribe from a series of topics
  */
-MQTTRegistry.prototype._publishWithRetries = function(attrs, retries, self) {
+MQTTRegistry.prototype._unsubscribe = function(self, topics, cb) {
+    self.client.unsubscribe(topics, function(err) {
+        if (cb) {
+            cb(err);
+        }
+    });
+}
+
+/**
+ * Helper for publishing a node's presence on the network
+ * TODO: could use async package to improve this
+ */
+MQTTRegistry.prototype._publishWithRetries = function(self, attrs, retries, cb) {
     var msg;
+    var count = 0;
+    var error = false;
     for (var key in attrs) {
+        if (error) {
+            break;
+        }
         if (attrs[key] instanceof Function) {
             msg = JSON.stringify(attrs[key]());
         } else {
             msg = JSON.stringify(attrs[key]);
         }
         self.client.publish(self.app + '/' + self.machType + '/' + self.id + '/' + key, msg, {qos: self.pubQos, retain: true}, function (err) {
+            if (error) {
+                // there's already been an error - stop
+                return;
+            }
             if (err) {
                 logger.log.error(err);
                 if (retries === 0) {
+                    error = true;
                     // TODO: do we really need to emit an error if one publication is not successful? What if it is not an important publication
                     self.emit('error');
+                    if (cb) {
+                        cb(err);
+                    }
                 } else {
-                    setTimeout(self._publishWithRetries, constants.mqtt.retryInterval, attrs, retries - 1, self);
+                    setTimeout(self._publishWithRetries, constants.mqtt.retryInterval, self, attrs, retries - 1);
+                }
+            } else {
+                count++;
+                if (count == Object.keys(attrs).length && cb) {
+                    cb();
                 }
             }
         });
@@ -267,7 +316,7 @@ MQTTRegistry.prototype._handleMessage = function(self, topic, message) {
         eventName = self.discoverAttributes[machType][attr];
     }
 
-    self.emit('discovery', attr, eventName, machId, message.toString());
+    self.emit('discovery', attr, eventName, machId, message);
 }
 
 /**
@@ -322,19 +371,32 @@ MQTTRegistry.prototype._getConnectionOptions = function(appName, machType, machI
 MQTTRegistry.prototype.addAttributes = function(attrs) {
     // store the attrs on the node
     for (var key in attrs) {
-        this._addAttribute(key, attrs[key]);
+        this.attributes[key] = attrs[key];
     }
 
     // if the client is currently connected to the broker, then publish the attrs
     // otherwise, we can simply wait and the attrs will be published next time the client
     // connects to the broker
     if (this.client.connected) {
-        this._publishWithRetries(attrs, constants.mqtt.retries, this);
+        this._publishWithRetries(this, attrs, constants.mqtt.retries);
     }
 }
 
-MQTTRegistry.prototype._addAttribute = function(attr, value) {
-    this.attributes[key] = value;
+MQTTRegistry.prototype.removeAttributes = function(attrs) {
+    var publishableAttrs = {};
+    for (var i = 0; i < attrs.length; i++) {
+        delete this.attributes[attrs[i]];
+        publishableAttrs[attrs[i]] = null;
+    }
+
+    if (this.client.connected) {
+        this._publishWithRetries(this, publishableAttrs, constants.mqtt.retries);
+    } else {
+        // the attributes will be removed the next time we connect to the broker
+        for (var i = 0; i < attrs.length; i++) {
+            this.attrsToRemove[attr] = null;
+        }
+    }
 }
 
 // TODO: avoid sending repeat subscriptions
@@ -367,6 +429,35 @@ MQTTRegistry.prototype.discoverAttributes = function(attrs) {
         this._subscribeWithRetries(this, subs, constants.mqtt.retries, function(granted) {
             logger.log(granted);
         });
+    }
+}
+
+MQTTRegistry.prototype.stopDiscoveringAttributes(dattrs) {
+    var topics = [];
+    for (var i = 0; i < dattrs.device.length; i++) {
+        delete this.discoverAttributes.device[dattrs.device[i]];
+        topics.push(this.app + '/device/+/' + dattrs.device[i]);
+    }
+
+    for (var i = 0; i < dattrs.fog.length; i++) {
+        delete this.discoverAttributes.fog[dattrs.fog[i]];
+        topics.push(this.app + '/fog/+/' + dattrs.fog[i]);
+    }
+
+    for (var i = 0; i < dattrs.cloud.length; i++) {
+        delete this.discoverAttributes.cloud[dattrs.cloud[i]];
+        topics.push(this.app + '/cloud/+/' + dattrs.cloud[i]);
+    }
+
+    if (this.client.connected) {
+        this._unsubscribe(this, topics, function(err) {
+            if (!err) {
+                // reset topicsToUnsubscribeFrom
+                this.topicsToUnsubscribeFrom = [];
+            }
+        });
+    } else {
+        this.topicsToUnsubscribeFrom = this.topicsToUnsubscribeFrom.concat(topics);
     }
 }
 
