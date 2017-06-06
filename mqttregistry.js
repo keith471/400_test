@@ -5,7 +5,6 @@
 var mqtt = require('mqtt'),
     logger = require('./jerrlog.js'),
     constants = require('./constants'),
-    regGen = require('./regexGenerator'),
     Registry = require('./registry');
 
 function MQTTRegistry(app, machType, id, port, subQos, pubQos) {
@@ -377,7 +376,7 @@ MQTTRegistry.prototype.addAttributes = function(attrs) {
     // if the client is currently connected to the broker, then publish the attrs
     // otherwise, we can simply wait and the attrs will be published next time the client
     // connects to the broker
-    if (this.client.connected) {
+    if (this.client && this.client.connected) {
         this._publishWithRetries(this, attrs, constants.mqtt.retries);
     }
 }
@@ -389,7 +388,7 @@ MQTTRegistry.prototype.removeAttributes = function(attrs) {
         publishableAttrs[attrs[i]] = null;
     }
 
-    if (this.client.connected) {
+    if (this.client && this.client.connected) {
         this._publishWithRetries(this, publishableAttrs, constants.mqtt.retries);
     } else {
         // the attributes will be removed the next time we connect to the broker
@@ -425,14 +424,14 @@ MQTTRegistry.prototype.discoverAttributes = function(attrs) {
     // if the client is currently connected to the broker, then subscribe to the attrs
     // otherwise, we can wait and we will subscribe to them next time the client connects to
     // the broker
-    if (!isEmpty && this.client.connected) {
+    if (!isEmpty && this.client && this.client.connected) {
         this._subscribeWithRetries(this, subs, constants.mqtt.retries, function(granted) {
             logger.log(granted);
         });
     }
 }
 
-MQTTRegistry.prototype.stopDiscoveringAttributes(dattrs) {
+MQTTRegistry.prototype.stopDiscoveringAttributes = function(dattrs) {
     var topics = [];
     for (var i = 0; i < dattrs.device.length; i++) {
         delete this.discoverAttributes.device[dattrs.device[i]];
@@ -449,7 +448,7 @@ MQTTRegistry.prototype.stopDiscoveringAttributes(dattrs) {
         topics.push(this.app + '/cloud/+/' + dattrs.cloud[i]);
     }
 
-    if (this.client.connected) {
+    if (this.client && this.client.connected) {
         this._unsubscribe(this, topics, function(err) {
             if (!err) {
                 // reset topicsToUnsubscribeFrom
@@ -465,7 +464,9 @@ MQTTRegistry.prototype.stopDiscoveringAttributes(dattrs) {
  * Closes the client, executing the callback upon completion
  */
 MQTTRegistry.prototype.quit = function(cb) {
-    this.client.end(false, cb);
+    if (this.client) {
+        this.client.end(false, cb);
+    }
 }
 
 /* exports */

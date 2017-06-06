@@ -22,7 +22,6 @@ function equivalentValues(a, b) {
     if ((a == null && b == null) ||
         (a == undefined && b == undefined)) {
             return true;
-        }
     }
 
     if (a instanceof Array && b instanceof Array) {
@@ -99,7 +98,7 @@ function Registrar(app, machType, id, port) {
         status: function() {
             return {
                 port: port,
-                ip: Registrar.getIPv4Address();
+                ip: Registry.getIPv4Address()
             };
         }
     };
@@ -391,7 +390,7 @@ Registrar.prototype._checkArrayOfStrings = function(arr) {
 
     for (var i = 0; i < arr.length; i++) {
         if (typeof arr[i] != 'string') {
-            throw new Error('the attribute \'' + arr[i] '\' is not a string');
+            throw new Error('the attribute \'' + arr[i] + '\' is not a string');
         }
     }
 }
