@@ -18,7 +18,6 @@ function MDNSRegistry(app, machType, id, port) {
 }
 
 /* MDNSRegistry inherits from Registry */
-//MDNSRegistry.prototype = new Registry();
 MDNSRegistry.prototype = Object.create(Registry.prototype);
 MDNSRegistry.prototype.constructor = MDNSRegistry;
 
@@ -27,22 +26,9 @@ MDNSRegistry.prototype.registerAndDiscover = function(options) {
     if (options !== undefined) {
         // parse options
         // attributes
-        for (var key in options.attributes) {
-            this.attributes[key] = options.attributes[key];
-        }
-
+        this.addAttributes(options.attributes);
         // attributesToDiscover
-        for (var key in options.attributesToDiscover.device) {
-            this.attributesToDiscover.device[key] = options.attributesToDiscover.device[key];
-        }
-
-        for (var key in options.attributesToDiscover.fog) {
-            this.attributesToDiscover.fog[key] = options.attributesToDiscover.fog[key];
-        }
-
-        for (var key in options.attributesToDiscover.cloud) {
-            this.attributesToDiscover.cloud[key] = options.attributesToDiscover.cloud[key];
-        }
+        this.addAttributesToDiscover(options.attributesToDiscover);
     }
 
     this._createAdvertisements(this.attributes);
@@ -63,12 +49,12 @@ MDNSRegistry.prototype._createAdvertisements = function(attrs) {
         if (attrs[key] instanceof Function) {
             details = JSON.stringify({
                 id: this.id,
-                msg: attrs[key]()
+                payload: attrs[key]()
             });
         } else {
             details = JSON.stringify({
                 id: this.id,
-                msg: attrs[key]
+                payload: attrs[key]
             });
         }
         this._createAdvertisementWithRetries(this, key, adName, details, constants.mdns.retries);
@@ -168,7 +154,7 @@ MDNSRegistry.prototype._browse = function(attr, machType, event) {
         }
 
         // emit a discovery event!
-        self.emit('discovery', attr, event, details.id, details.msg);
+        self.emit('discovery', attr, event, details.id, details.payload);
     });
 
     browser.start();
@@ -193,7 +179,7 @@ MDNSRegistry.prototype._browseForStatus = function(machType, events) {
         }
 
         // emit a node online event!
-        self.emit('discovery', 'status', events.online, details.id, details.msg);
+        self.emit('discovery', 'status', events.online, details.id, details.payload);
     });
 
     browser.on('serviceDown', function(service) {
@@ -232,13 +218,16 @@ MDNSRegistry.prototype._getIp = function(addresses) {
 // Add and discover attributes
 //==============================================================================
 
+MDNSRegistry.prototype.announceAttributes = function(attrs) {
+    this.addAttributes(attrs);
+    // TODO: could check that there isn't any crossover between attrs and this.attributes
+    this._createAdvertisements(attrs);
+}
+
 MDNSRegistry.prototype.addAttributes = function(attrs) {
     for (var attr in attrs) {
         this.attributes[attr] = attrs[attr];
     }
-
-    // TODO: could check that there isn't any crossover between attrs and this.attributes
-    this._createAdvertisements(attrs);
 }
 
 MDNSRegistry.prototype.removeAttributes = function(attrs) {
@@ -252,6 +241,12 @@ MDNSRegistry.prototype.removeAttributes = function(attrs) {
 }
 
 MDNSRegistry.prototype.discoverAttributes = function(dattrs) {
+    this.addAttributesToDiscover(dattrs);
+    // TODO: could check that there isn't any crossover between dattrs and this.attributesToDiscover
+    this._browseForAttributes(dattrs);
+}
+
+MDNSRegistry.prototype.addAttributesToDiscover = function(dattrs) {
     for (var key in dattrs.device) {
         this.attributesToDiscover.device[key] = dattrs.device[key];
     }
@@ -263,9 +258,6 @@ MDNSRegistry.prototype.discoverAttributes = function(dattrs) {
     for (var key in dattrs.cloud) {
         this.attributesToDiscover.cloud[key] = dattrs.cloud[key];
     }
-
-    // TODO: could check that there isn't any crossover between dattrs and this.attributesToDiscover
-    this._browseForAttributes(dattrs);
 }
 
 MDNSRegistry.prototype.stopDiscoveringAttributes = function(dattrs) {

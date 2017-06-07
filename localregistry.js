@@ -29,7 +29,6 @@ function LocalRegistry(app, machType, id, port) {
 }
 
 /* LocalRegistry inherits from Registry */
-//LocalRegistry.prototype = new Registry();
 LocalRegistry.prototype = Object.create(Registry.prototype);
 LocalRegistry.prototype.constructor = LocalRegistry;
 
@@ -42,22 +41,9 @@ LocalRegistry.prototype.registerAndDiscover = function(options) {
     if (options !== undefined) {
         // parse options
         // attributes
-        for (var key in options.attributes) {
-            this.attributes[key] = options.attributes[key];
-        }
-
+        this.addAttributes(options.attributes);
         // attributesToDiscover
-        for (var key in options.attributesToDiscover.device) {
-            this.attributesToDiscover.device[key] = options.attributesToDiscover.device[key];
-        }
-
-        for (var key in options.attributesToDiscover.fog) {
-            this.attributesToDiscover.fog[key] = options.attributesToDiscover.fog[key];
-        }
-
-        for (var key in options.attributesToDiscover.cloud) {
-            this.attributesToDiscover.cloud[key] = options.attributesToDiscover.cloud[key];
-        }
+        this.addAttributesToDiscover(options.attributesToDiscover);
     }
 
     // initialize the local storage
@@ -266,12 +252,19 @@ LocalRegistry.prototype._makeDiscoveries = function(self, machs, dattrs) {
 /**
  * Add custom, discoverable attributes on the node
  */
+LocalRegistry.prototype.announceAttributes = function(attrs) {
+    this.addAttributes(attrs);
+    //this._addAttributesWithRetry(attrs, 1, this);
+}
+
+/**
+ * Add attributes on the node
+ */
 LocalRegistry.prototype.addAttributes = function(attrs) {
     for (var key in attrs) {
         this.attributes[key] = attrs[key];
         this.attrsToAdd[key] = attrs[key];
     }
-    //this._addAttributesWithRetry(attrs, 1, this);
 }
 
 /*
@@ -325,6 +318,13 @@ LocalRegistry.prototype._removeAttributesWithRetry = function(attrs, attemptNumb
  * look for other nodes with these attributes the next time it scans local storage.
  */
 LocalRegistry.prototype.discoverAttributes = function(dattrs) {
+    this.addAttributesToDiscover(dattrs);
+}
+
+/**
+ * Set attributes to discover when the node registers
+ */
+LocalRegistry.prototype.addAttributesToDiscover = function(dattrs) {
     for (var key in dattrs.device) {
         this.attributesToDiscover.device[key] = dattrs.device[key];
     }

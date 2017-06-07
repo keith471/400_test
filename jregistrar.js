@@ -97,13 +97,11 @@ function Registrar(app, machType, id, port) {
     this.machType = machType;
     this.id = id;
     this.port = port;
-    this.mqttRegistry = new MQTTRegistry(app, machType, id, port);
+    var subQos = this.machType == globals.NodeType.DEVICE ? 0 : 1;
+    var pubQos = this.machType == globals.NodeType.DEVICE ? 0 : 1;
+    this.mqttRegistry = new MQTTRegistry(app, machType, id, port, subQos, pubQos);
     this.mdnsRegistry = new MDNSRegistry(app, machType, id, port);
     this.localRegistry = new LocalRegistry(app, machType, id, port);
-
-    console.log(MQTTRegistry.prototype.constructor);
-    console.log(MDNSRegistry.prototype.constructor);
-    console.log(LocalRegistry.prototype.constructor);
 
     // store discoveries here so that we can easily check for duplicates
     this.discoveries = {};
@@ -117,8 +115,10 @@ function Registrar(app, machType, id, port) {
     var attrs = {
         status: function() {
             return {
-                port: port,
-                ip: getIPv4Address()
+                payload: {
+                    port: port,
+                    ip: getIPv4Address()
+                }
             };
         }
     };
@@ -131,7 +131,7 @@ function Registrar(app, machType, id, port) {
     if (this.machType === globals.NodeType.DEVICE) {
         // default discoveries:
         // devices discover fogs
-        var disc = {
+        var dattrs = {
             fog: {
                 status: {
                     online: 'fog-up',
@@ -140,13 +140,13 @@ function Registrar(app, machType, id, port) {
                 }
             }
         };
-        this.mqttRegistry.discoverAttributes(disc);
-        this.mdnsRegistry.discoverAttributes(disc);
-        this.localRegistry.discoverAttributes(disc);
+        this.mqttRegistry.addAttributesToDiscover(dattrs);
+        this.mdnsRegistry.addAttributesToDiscover(dattrs);
+        this.localRegistry.addAttributesToDiscover(dattrs);
     } else if (this.machType === globals.NodeType.FOG) {
         // default discoveries:
         // fogs discover clouds
-        var disc = {
+        var dattrs = {
             cloud: {
                 status: {
                     online: 'cloud-up',
@@ -154,9 +154,9 @@ function Registrar(app, machType, id, port) {
                 }
             }
         };
-        this.mqttRegistry.discoverAttributes(disc);
-        this.mdnsRegistry.discoverAttributes(disc);
-        this.localRegistry.discoverAttributes(disc);
+        this.mqttRegistry.addAttributesToDiscover(dattrs);
+        this.mdnsRegistry.addAttributesToDiscover(dattrs);
+        this.localRegistry.addAttributesToDiscover(dattrs);
     } else {
         // no default cloud discoveries
     }
@@ -170,6 +170,7 @@ function Registrar(app, machType, id, port) {
         console.log('mqtt error');
         // mqtt cleanup
         self.mqttRegistry.quit(function() {
+            console.log('quit mqtt registry');
             setTimeout(self._retry, globals.retryInterval, self, globals.Protocol.MQTT);
         });
     });
@@ -197,7 +198,8 @@ function Registrar(app, machType, id, port) {
 }
 
 /* Registrar inherits from EventEmitter */
-Registrar.prototype = new EventEmitter();
+Registrar.prototype = Object.create(EventEmitter.prototype);
+Registrar.prototype.constructor = Registrar;
 
 /**
  * Register a node on the network, and discover other nodes.
@@ -281,9 +283,9 @@ Registrar.prototype.addAttributes = function(attrs) {
     // error handling
     this._checkAttributes(attrs);
     // add the attributes on each protocol
-    this.mqttRegistry.addAttributes(attrs);
-    this.mdnsRegistry.addAttributes(attrs);
-    this.localRegistry.addAttributes(attrs);
+    this.mqttRegistry.announceAttributes(attrs);
+    this.mdnsRegistry.announceAttributes(attrs);
+    this.localRegistry.announceAttributes(attrs);
 }
 
 Registrar.prototype.removeAttributes = function(attrs) {

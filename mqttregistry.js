@@ -20,7 +20,6 @@ function MQTTRegistry(app, machType, id, port, subQos, pubQos) {
 }
 
 /* MQTTRegistry inherits from Registry */
-//MQTTRegistry.prototype = new Registry();
 MQTTRegistry.prototype = Object.create(Registry.prototype);
 MQTTRegistry.prototype.constructor = MQTTRegistry;
 
@@ -101,25 +100,11 @@ MQTTRegistry.prototype.registerAndDiscover = function(options) {
     }
 
     // create an mqtt client
-    this.client = mqtt.connect(constants.mqtt.brokerUrl, this._getConnectionOptions(this.app, this.machType, this.id));
+    this.client = mqtt.connect(constants.mqtt.brokerUrl, this._getConnectionOptions());
 
     // set up event listeners for the client
     this._prepareForEvents(newSubs, oldSubs, newAttrs, oldAttrs);
 }
-
-/**
- * Publish a query for a node's port and ip address
- * Pass as a message the id of the node making the request, though this is not used at this point
- */
-/*
-MQTTRegistry.prototype.query = function(machType, machId) {
-    this.client.publish(this.app + '/query/' + machType + '/' + machId + '/ipandport', this.id, {qos: 1, retain: false}, function (err) {
-        if (err) {
-            logger.log.error(err);
-        }
-    });
-}
-*/
 
 /**
  * A general helper for listening for events from the MQTT client
@@ -131,6 +116,7 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
     this.client.on('connect', function (connack) {
         // if first connection, then set up subscriptions
         if (!connack.sessionPresent) {
+            console.log('no session present');
             // make subscriptions
             if (newSubs !== null) {
                 // add newSubs to oldSubs
@@ -150,6 +136,7 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
                 self._publishWithRetries(self, oldAttrs, constants.mqtt.retries);
             });
         } else {
+            console.log('session present');
             // our connection is already present, meaning that the broker is still aware of our old subscriptions
             // so, we make the new ones and then publish the new attrs (or at the very least, an online status)
             // we also need to make null publications for any attrsToRemove and
@@ -190,7 +177,7 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
     this.client.on('message', function (topic, message, packet) {
         var parsedMsg = JSON.parse(message.toString());
         if (parsedMsg !== null) {
-            self._handleMessage(self, topic, parsedMsg);
+            self._handleMessage(self, topic, parsedMsg.payload);
         }
     });
 
@@ -205,10 +192,12 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
     */
 
     this.client.on('offline', function () {
+        console.log('error in offline');
         self.emit('error');
     });
 
     this.client.on('error', function (error) {
+        console.log('error in error');
         logger.log.error(error);
         self.emit('error');
     });
@@ -218,6 +207,9 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
  * Helper for setting up subscriptions to the broker with retries
  */
 MQTTRegistry.prototype._subscribeWithRetries = function(self, subs, retries, cb) {
+    if (Object.keys(subs).length == 0) {
+        return;
+    }
     self.client.subscribe(subs, function (err, granted) {
         if (err) {
             logger.log.error(err);
@@ -225,6 +217,7 @@ MQTTRegistry.prototype._subscribeWithRetries = function(self, subs, retries, cb)
                 // an error here means the node has been unable to subscribe and will therefore
                 // be unresponsive to requests from other nodes. thus, it should NOT publish
                 // its presence on the network
+                console.log('error when trying to subscribe');
                 self.emit('error');
             } else {
                 setTimeout(self._subscribeWithRetries, constants.mqtt.retryInterval, self, subs, retries - 1, cb);
@@ -261,9 +254,13 @@ MQTTRegistry.prototype._publishWithRetries = function(self, attrs, retries, cb) 
             break;
         }
         if (attrs[key] instanceof Function) {
-            msg = JSON.stringify(attrs[key]());
+            msg = JSON.stringify({ payload: attrs[key]() });
         } else {
-            msg = JSON.stringify(attrs[key]);
+            if (attrs[key] === null) {
+                msg = JSON.stringify(null);
+            } else {
+                msg = JSON.stringify({ payload: attrs[key] });
+            }
         }
         self.client.publish(self.app + '/' + self.machType + '/' + self.id + '/' + key, msg, {qos: self.pubQos, retain: true}, function (err) {
             if (error) {
@@ -275,6 +272,7 @@ MQTTRegistry.prototype._publishWithRetries = function(self, attrs, retries, cb) 
                 if (retries === 0) {
                     error = true;
                     // TODO: do we really need to emit an error if one publication is not successful? What if it is not an important publication
+                    console.log('error when trying to publish');
                     self.emit('error');
                     if (cb) {
                         cb(err);
@@ -322,36 +320,18 @@ MQTTRegistry.prototype._handleMessage = function(self, topic, message) {
  * takes as arguments the name of the application, the type of the machine, and the
  * id of the machine
  */
-MQTTRegistry.prototype._getConnectionOptions = function(appName, machType, machId) {
+MQTTRegistry.prototype._getConnectionOptions = function() {
     // create the will
-    var will;
-
-    if (machType === constants.globals.NodeType.DEVICE) {
-        will = {
-            topic: appName + '/device/' + machId + '/status',
-            payload: 'offline',
-            qos: 0,
-            retain: true
-        };
-    } else if (machType === constants.globals.NodeType.FOG) {
-        will = {
-            topic: appName + '/fog/' + machId + '/status',
-            payload: 'offline',
-            qos: 1,
-            retain: true
-        };
-    } else {
-        will = {
-            topic: appName + '/cloud/' + machId + '/status',
-            payload: 'offline',
-            qos: 1,
-            retain: true
-        };
+    var will = {
+        topic: this.app + '/' + this.machType + '/' + this.id + '/status',
+        payload: JSON.stringify({ payload: 'offline' }),
+        qos: this.pubQos,
+        retain: true
     }
 
     // set and return the connection options
     return {
-        clientId: machId,
+        clientId: this.id,
         keepalive: constants.mqtt.keepAlive,
         clean: false,
         connectTimeout: constants.mqtt.connectionTimeout,
@@ -366,17 +346,21 @@ MQTTRegistry.prototype._getConnectionOptions = function(appName, machType, machI
 /**
  * Add and publish discoverable attributes for this node
  */
-MQTTRegistry.prototype.addAttributes = function(attrs) {
+MQTTRegistry.prototype.announceAttributes = function(attrs) {
     // store the attrs on the node
-    for (var key in attrs) {
-        this.attributes[key] = attrs[key];
-    }
+    this.addAttributes(attrs);
 
     // if the client is currently connected to the broker, then publish the attrs
     // otherwise, we can simply wait and the attrs will be published next time the client
     // connects to the broker
     if (this.client && this.client.connected) {
         this._publishWithRetries(this, attrs, constants.mqtt.retries);
+    }
+}
+
+MQTTRegistry.prototype.addAttributes = function(attrs) {
+    for (var key in attrs) {
+        this.attributes[key] = attrs[key];
     }
 }
 
@@ -427,6 +411,20 @@ MQTTRegistry.prototype.discoverAttributes = function(attrs) {
         this._subscribeWithRetries(this, subs, constants.mqtt.retries, function(granted) {
             logger.log(granted);
         });
+    }
+}
+
+MQTTRegistry.prototype.addAttributesToDiscover = function(dattrs) {
+    for (var key in dattrs.device) {
+        this.attributesToDiscover.device[key] = dattrs.device[key];
+    }
+
+    for (var key in dattrs.fog) {
+        this.attributesToDiscover.fog[key] = dattrs.fog[key];
+    }
+
+    for (var key in dattrs.cloud) {
+        this.attributesToDiscover.cloud[key] = dattrs.cloud[key];
     }
 }
 
