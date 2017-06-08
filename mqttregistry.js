@@ -13,10 +13,6 @@ function MQTTRegistry(app, machType, id, port, subQos, pubQos) {
     this.subQos = subQos;
     // the quality of service to use for publications
     this.pubQos = pubQos;
-    // attributes to remove the next time we connect
-    this.attrsToRemove = {};
-    // topics to unsubscribe from the next time we connect
-    this.topicsToUnsubscribeFrom = [];
 
     // attributes that have already been published
     this.publishedAttrs = {};
@@ -29,7 +25,7 @@ function MQTTRegistry(app, machType, id, port, subQos, pubQos) {
     // attributes to be published on (re)connection
     this.attrsToPublish = {};
     // attributes to remove when reconnecting
-    this.attrsToRemove = [];
+    this.attrsToRemove = {};
     // attributes to subscribe to on (re)connection
     this.attrsToSubTo = {
         device: {},
@@ -37,10 +33,10 @@ function MQTTRegistry(app, machType, id, port, subQos, pubQos) {
         cloud: {}
     }
     // attributes to unsubscribe from on reconnection
-    this.attributesToUnsubFrom = {
-        device: [],
-        fog: [],
-        cloud: []
+    this.attrsToUnsubFrom = {
+        device: {},
+        fog: {},
+        cloud: {}
     }
 }
 
@@ -53,11 +49,7 @@ MQTTRegistry.prototype.constructor = MQTTRegistry;
  * Designed to be called multiple times if need be
  */
 MQTTRegistry.prototype.registerAndDiscover = function(options) {
-    // collect old vs. new subscriptions and attributes
-    var oldAttrs = {};
-    var oldSubs = {};
-    var newAttrs = null;
-    var newSubs = null;
+
 
     for (var key in this.attributes) {
         // ensure that we republish any attributes determined by a function, for example, status
@@ -219,95 +211,8 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
     });
 
     this.client.on('error', function (error) {
-        logger.log.error(error);
         self.emit('error');
     });
-}
-
-/**
- * Helper for setting up subscriptions to the broker with retries
- */
-MQTTRegistry.prototype._subscribeWithRetries = function(self, subs, retries, cb) {
-    if (Object.keys(subs).length == 0) {
-        cb();
-        return;
-    }
-    self.client.subscribe(subs, function (err, granted) {
-        if (err) {
-            logger.log.error(err);
-            if (retries === 0) {
-                // an error here means the node has been unable to subscribe and will therefore
-                // be unresponsive to requests from other nodes. thus, it should NOT publish
-                // its presence on the network
-                self.emit('error');
-            } else {
-                setTimeout(self._subscribeWithRetries, constants.mqtt.retryInterval, self, subs, retries - 1, cb);
-            }
-        } else {
-            if (cb !== undefined) {
-                cb(granted);
-            }
-        }
-    });
-}
-
-/**
- * Unsubscribe from a series of topics
- */
-MQTTRegistry.prototype._unsubscribe = function(self, topics, cb) {
-    self.client.unsubscribe(topics, function(err) {
-        if (cb) {
-            cb(err);
-        }
-    });
-}
-
-/**
- * Helper for publishing a node's presence on the network
- * TODO: could use async package to improve this
- */
-MQTTRegistry.prototype._publishWithRetries = function(self, attrs, retries, cb) {
-    var msg;
-    var count = 0;
-    var error = false;
-    for (var key in attrs) {
-        if (error) {
-            break;
-        }
-        if (attrs[key] instanceof Function) {
-            msg = JSON.stringify({ payload: attrs[key]() });
-        } else {
-            if (attrs[key] === null) {
-                msg = JSON.stringify(null);
-            } else {
-                msg = JSON.stringify({ payload: attrs[key] });
-            }
-        }
-        self.client.publish(self.app + '/' + self.machType + '/' + self.id + '/' + key, msg, {qos: self.pubQos, retain: true}, function (err) {
-            if (error) {
-                // there's already been an error - stop
-                return;
-            }
-            if (err) {
-                logger.log.error(err);
-                if (retries === 0) {
-                    error = true;
-                    // TODO: do we really need to emit an error if one publication is not successful? What if it is not an important publication
-                    self.emit('error');
-                    if (cb) {
-                        cb(err);
-                    }
-                } else {
-                    setTimeout(self._publishWithRetries, constants.mqtt.retryInterval, self, attrs, retries - 1);
-                }
-            } else {
-                count++;
-                if (count == Object.keys(attrs).length && cb) {
-                    cb();
-                }
-            }
-        });
-    }
 }
 
 /**
@@ -333,6 +238,126 @@ MQTTRegistry.prototype._handleMessage = function(self, topic, message) {
     }
 
     self.emit('discovery', attr, eventName, machId, message);
+}
+
+/**
+ * Helper for setting up subscriptions to the broker with retries
+ */
+MQTTRegistry.prototype._subscribeWithRetries = function(self, dattrs, retries) {
+    var subs = [];
+
+    for (var attr in dattrs.device) {
+        subs[self.app + '/device/' + self.id + '/' + attr] = self.subQos;
+    }
+
+    for (var attr in dattrs.fog) {
+        subs[self.app + '/fog/' + self.id + '/' + attr] = self.subQos;
+    }
+
+    for (var attr in dattrs.cloud) {
+        subs[self.app + '/cloud/' + self.id + '/' + attr] = self.subQos;
+    }
+
+    if (subs.length === 0) {
+        return;
+    }
+
+    self.client.subscribe(subs, function (err, granted) {
+        if (err) {
+            if (retries !== 0) {
+                setTimeout(self._subscribeWithRetries, constants.mqtt.retryInterval, self, dattrs, retries - 1);
+            }
+        } else {
+            // move attrs from attrsToSubTo to subscribedAttrs
+            var components, machType, attr;
+            for (var i = 0; i < granted.length; i++) {
+                components = granted[i].topic.split('/');
+                machType = components[1];
+                attr = components[3];
+                self.subscribedAttrs[machType][attr] = dattrs[machType][attr];
+                delete self.attrsToSubTo[machType][attr];
+            }
+        }
+    });
+}
+
+/**
+ * Unsubscribe from a series of topics
+ */
+MQTTRegistry.prototype._unsubscribeWithRetries = function(self, dattrs, retries) {
+    var topics = [];
+    for (var attr in dattrs.device) {
+        topics.push(self.app + '/device/+/' + dattrs.device[attr]);
+    }
+
+    for (var attr in dattrs.fog) {
+        topics.push(self.app + '/fog/+/' + dattrs.fog[attr]);
+    }
+
+    for (var attr in dattrs.cloud) {
+        topics.push(self.app + '/cloud/+/' + dattrs.cloud[attr]);
+    }
+
+    self.client.unsubscribe(topics, function(err) {
+        if (err) {
+            if (retries > 0) {
+                setTimeout(self._unsubscribeWithRetries, constants.mqtt.retryInterval, self, topics, retries - 1);
+            }
+        } else {
+            for (var attr in dattrs.device) {
+                delete self.subscribedAttrs.device[attr];
+                delete self.attrsToUnsubFrom.device[attr];
+            }
+            for (var attr in dattrs.fog) {
+                delete self.subscribedAttrs.fog[attr];
+                delete self.attrsToUnsubFrom.fog[attr];
+            }
+            for (var attr in dattrs.cloud) {
+                delete self.subscribedAttrs.cloud[attr];
+                delete self.attrsToUnsubFrom.cloud[attr];
+            }
+        }
+    });
+}
+
+/**
+ * Helper for publishing an attribute with retries
+ */
+MQTTRegistry.prototype._publishWithRetries = function(self, attr, value, retries) {
+    var msg;
+    if (value instanceof Function) {
+        msg = JSON.stringify({ payload: value() });
+    } else {
+        msg = JSON.stringify({ payload: value });
+    }
+    self.client.publish(self.app + '/' + self.machType + '/' + self.id + '/' + attr, msg, {qos: self.pubQos, retain: true}, function (err) {
+        if (err) {
+            if (retries === 0) {
+                setTimeout(self._publishWithRetries, constants.mqtt.retryInterval, self, attr, value, retries - 1);
+            }
+        } else {
+            // move the attribute from attrsToPublish to publishedAttrs
+            self.publishedAttrs[attr] = value;
+            delete self.attrsToPublish[attr];
+        }
+    });
+}
+
+/**
+ * Helper for "un"-publishing an attribute
+ */
+MQTTRegistry.prototype._unpublishWithRetries = function(self, attr, retries) {
+    self.client.publish(self.app + '/' + self.machType + '/' + self.id + '/' + attr, null, {qos: self.pubQos, retain: true}, function (err) {
+        if (err) {
+            if (retries > 0) {
+                setTimeout(self._unpublishWithRetries, constants.mqtt.retryInterval, self, attr, retries - 1);
+            }
+        } else {
+            // remove the attribute from attrsToRemove and publishedAttrs
+            delete self.attrsToRemove[attr];
+            delete self.publishedAttrs[attr];
+        }
+    });
 }
 
 /**
@@ -366,114 +391,144 @@ MQTTRegistry.prototype._getConnectionOptions = function() {
 /**
  * Add and publish discoverable attributes for this node
  */
-MQTTRegistry.prototype.announceAttributes = function(attrs) {
-    // store the attrs on the node
-    this.addAttributes(attrs);
-
-    // if the client is currently connected to the broker, then publish the attrs
-    // otherwise, we can simply wait and the attrs will be published next time the client
-    // connects to the broker
-    if (this.client && this.client.connected) {
-        this._publishWithRetries(this, attrs, constants.mqtt.retries);
-    }
-}
-
 MQTTRegistry.prototype.addAttributes = function(attrs) {
-    for (var key in attrs) {
-        this.attributes[key] = attrs[key];
-    }
-}
-
-MQTTRegistry.prototype.removeAttributes = function(attrs) {
-    var publishableAttrs = {};
-    for (var i = 0; i < attrs.length; i++) {
-        delete this.attributes[attrs[i]];
-        publishableAttrs[attrs[i]] = null;
-    }
-
-    if (this.client && this.client.connected) {
-        this._publishWithRetries(this, publishableAttrs, constants.mqtt.retries);
-    } else {
-        // the attributes will be removed the next time we connect to the broker
-        for (var i = 0; i < attrs.length; i++) {
-            this.attrsToRemove[attr] = null;
+    for (var attr in attrs) {
+        // just in case this is in the queue for removal...
+        delete this.attrsToRemove[attr];
+        // check that it's not already published
+        if (!this.publishedAttrs.hasOwnProperty(attr)) {
+            this.attrsToPublish[attr] = attrs[attr];
+            if (this.client && this.client.connected) {
+                // try to publish the attribute
+                this._publishWithRetries(this, attr, attrs[attr], constants.mqtt.retries);
+            }
         }
     }
 }
 
-// TODO: avoid sending repeat subscriptions
-MQTTRegistry.prototype.discoverAttributes = function(attrs) {
-    // store the attributes on the node
-    var subs = {};
-    var isEmpty = true;
-    for (var key in attrs.device) {
-        isEmpty = false;
-        this.attributesToDiscover.device[key] = attrs.device[key];
-        subs[this.app + '/device/+/' + key] = this.subQos;
-    }
-
-    for (var key in attrs.fog) {
-        isEmpty = false;
-        this.attributesToDiscover.fog[key] = attrs.fog[key];
-        subs[this.app + '/fog/+/' + key] = this.subQos;
-    }
-
-    for (var key in attrs.cloud) {
-        isEmpty = false;
-        this.attributesToDiscover.cloud[key] = attrs.cloud[key];
-        subs[this.app + '/cloud/+/' + key] = this.subQos;
-    }
-
-    // if the client is currently connected to the broker, then subscribe to the attrs
-    // otherwise, we can wait and we will subscribe to them next time the client connects to
-    // the broker
-    if (!isEmpty && this.client && this.client.connected) {
-        this._subscribeWithRetries(this, subs, constants.mqtt.retries, function(granted) {
-            logger.log(granted);
-        });
+MQTTRegistry.prototype.removeAttributes = function(attrs) {
+    for (var i = 0; i < attrs.length; i++) {
+        // remove it from attrsToPublish, if need be
+        delete this.attrsToPublish[attrs[i]];
+        if (this.publishedAttrs.hasOwnProperty(attrs[i])) {
+            this.attrsToRemove[attrs[i]] = null;
+            if (this.client && this.client.connected) {
+                // try to remove it
+                this._unpublishWithRetries(this, attrs[i], constants.mqtt.retries);
+            }
+        }
     }
 }
 
-MQTTRegistry.prototype.addAttributesToDiscover = function(dattrs) {
-    for (var key in dattrs.device) {
-        this.attributesToDiscover.device[key] = dattrs.device[key];
+MQTTRegistry.prototype.discoverAttributes = function(dattrs) {
+    var subs = null;
+
+    for (var attr in dattrs.device) {
+        // in case this attr is queued up to be unsubscribed from
+        delete this.attrsToUnsubFrom.device[attr];
+        if (!this.subscribedAttrs.device.hasOwnProperty(attr)) {
+            // try to subscribe to it
+            if (subs === null) {
+                subs = {
+                    device: {},
+                    fog: {},
+                    cloud: {}
+                };
+            }
+            subs.device[attr] = dattrs.device[attr];
+            this.attrsToSubTo.device[attr] = dattrs.device[attr];
+        }
     }
 
-    for (var key in dattrs.fog) {
-        this.attributesToDiscover.fog[key] = dattrs.fog[key];
+    for (var attr in dattrs.fog) {
+        // in case this attr is queued up to be unsubscribed from
+        delete this.attrsToUnsubFrom.fog[attr];
+        if (!this.subscribedAttrs.fog.hasOwnProperty(attr)) {
+            // try to subscribe to it
+            if (subs === null) {
+                subs = {
+                    device: {},
+                    fog: {},
+                    cloud: {}
+                };
+            }
+            subs.fog[attr] = dattrs.fog[attr];
+            this.attrsToSubTo.fog[attr] = dattrs.fog[attr];
+        }
     }
 
-    for (var key in dattrs.cloud) {
-        this.attributesToDiscover.cloud[key] = dattrs.cloud[key];
+    for (var attr in dattrs.cloud) {
+        // in case this attr is queued up to be unsubscribed from
+        delete this.attrsToUnsubFrom.cloud[attr];
+        if (!this.subscribedAttrs.cloud.hasOwnProperty(attr)) {
+            // try to subscribe to it
+            if (subs === null) {
+                subs = {
+                    device: {},
+                    fog: {},
+                    cloud: {}
+                };
+            }
+            subs.cloud[attr] = dattrs.cloud[attr];
+            this.attrsToSubTo.cloud[attr] = dattrs.cloud[attr];
+        }
+    }
+
+    if (subs !== null && this.client && this.client.connected) {
+        this._subscribeWithRetries(this, subs, constants.mqtt.retries);
     }
 }
 
 MQTTRegistry.prototype.stopDiscoveringAttributes = function(dattrs) {
-    var topics = [];
+    var unsubs = null;
+
     for (var i = 0; i < dattrs.device.length; i++) {
-        delete this.attributesToDiscover.device[dattrs.device[i]];
-        topics.push(this.app + '/device/+/' + dattrs.device[i]);
+        delete this.attrsToSubTo[dattrs.device[i]];
+        if (this.subscribedAttrs.hasOwnProperty(dattrs.device[i])) {
+            this.attrsToUnsubFrom.device[dattrs.device[i]] = null;
+            if (unsubs === null) {
+                unsubs = {
+                    device: {},
+                    fog: {},
+                    cloud: {}
+                }
+            }
+            unsubs.device[dattrs.device[i]] = null;
+        }
     }
 
     for (var i = 0; i < dattrs.fog.length; i++) {
-        delete this.attributesToDiscover.fog[dattrs.fog[i]];
-        topics.push(this.app + '/fog/+/' + dattrs.fog[i]);
+        delete this.attrsToSubTo[dattrs.fog[i]];
+        if (this.subscribedAttrs.hasOwnProperty(dattrs.fog[i])) {
+            this.attrsToUnsubFrom.fog[dattrs.fog[i]] = null;
+            if (unsubs === null) {
+                unsubs = {
+                    device: {},
+                    fog: {},
+                    cloud: {}
+                }
+            }
+            unsubs.fog[dattrs.fog[i]] = null;
+        }
     }
 
     for (var i = 0; i < dattrs.cloud.length; i++) {
-        delete this.attributesToDiscover.cloud[dattrs.cloud[i]];
-        topics.push(this.app + '/cloud/+/' + dattrs.cloud[i]);
+        delete this.attrsToSubTo[dattrs.cloud[i]];
+        if (this.subscribedAttrs.hasOwnProperty(dattrs.cloud[i])) {
+            this.attrsToUnsubFrom.cloud[dattrs.cloud[i]] = null;
+            if (unsubs === null) {
+                unsubs = {
+                    device: {},
+                    fog: {},
+                    cloud: {}
+                }
+            }
+            unsubs.cloud[dattrs.cloud[i]] = null;
+        }
     }
 
-    if (this.client && this.client.connected) {
-        this._unsubscribe(this, topics, function(err) {
-            if (!err) {
-                // reset topicsToUnsubscribeFrom
-                this.topicsToUnsubscribeFrom = [];
-            }
-        });
-    } else {
-        this.topicsToUnsubscribeFrom = this.topicsToUnsubscribeFrom.concat(topics);
+    if (unsubs !== null && this.client && this.client.connected) {
+        this._unsubscribeWithRetries(this, unsubs, constants.mqtt.retries);
     }
 }
 

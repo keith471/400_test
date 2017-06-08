@@ -139,9 +139,9 @@ function Registrar(app, machType, id, port) {
                 }
             }
         };
-        this.mqttRegistry.addAttributesToDiscover(dattrs);
-        this.mdnsRegistry.addAttributesToDiscover(dattrs);
-        this.localRegistry.addAttributesToDiscover(dattrs);
+        this.mqttRegistry.discoverAttributes(dattrs);
+        this.mdnsRegistry.discoverAttributes(dattrs);
+        this.localRegistry.discoverAttributes(dattrs);
     } else if (this.machType === globals.NodeType.FOG) {
         // default discoveries:
         // fogs discover clouds
@@ -153,9 +153,9 @@ function Registrar(app, machType, id, port) {
                 }
             }
         };
-        this.mqttRegistry.addAttributesToDiscover(dattrs);
-        this.mdnsRegistry.addAttributesToDiscover(dattrs);
-        this.localRegistry.addAttributesToDiscover(dattrs);
+        this.mqttRegistry.discoverAttributes(dattrs);
+        this.mdnsRegistry.discoverAttributes(dattrs);
+        this.localRegistry.discoverAttributes(dattrs);
     } else {
         // no default cloud discoveries
     }
@@ -282,17 +282,10 @@ Registrar.prototype._retry = function(self, protocol) {
 Registrar.prototype.addAttributes = function(attrs) {
     // error handling
     this._checkAttributes(attrs);
-    if (this.started) {
-        // announce the attributes on each protocol
-        this.mqttRegistry.announceAttributes(attrs);
-        this.mdnsRegistry.announceAttributes(attrs);
-        this.localRegistry.announceAttributes(attrs);
-    } else {
-        // add the attributes on each protocol
-        this.mqttRegistry.addAttributes(attrs);
-        this.mdnsRegistry.addAttributes(attrs);
-        this.localRegistry.addAttributes(attrs);
-    }
+    // add the attributes on each protocol
+    this.mqttRegistry.addAttributes(attrs);
+    this.mdnsRegistry.addAttributes(attrs);
+    this.localRegistry.addAttributes(attrs);
 }
 
 Registrar.prototype.removeAttributes = function(attrs) {

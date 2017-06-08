@@ -1,5 +1,8 @@
 # TODO
 
+- rewrite handleMessage, prepareForEvents, and registerAndDiscover
+- rework mdns and local storage
+
 - TEST!!!
     - test rest of api functions like add and remove attributes, stop discovering, etc.
 
@@ -20,10 +23,8 @@
 **LocalRegistry**
 
 **MDNSRegistry**
-- write setAttibutes and setAttributesToDiscover
 
 **MQTTRegistry**
-- write setAttibutes and setAttributesToDiscover
 
 **Registrar**
 
