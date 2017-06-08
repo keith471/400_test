@@ -116,7 +116,6 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
     this.client.on('connect', function (connack) {
         // if first connection, then set up subscriptions
         if (!connack.sessionPresent) {
-            console.log('no session present');
             // make subscriptions
             if (newSubs !== null) {
                 // add newSubs to oldSubs
@@ -136,7 +135,6 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
                 self._publishWithRetries(self, oldAttrs, constants.mqtt.retries);
             });
         } else {
-            console.log('session present');
             // our connection is already present, meaning that the broker is still aware of our old subscriptions
             // so, we make the new ones and then publish the new attrs (or at the very least, an online status)
             // we also need to make null publications for any attrsToRemove and
@@ -192,12 +190,10 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
     */
 
     this.client.on('offline', function () {
-        console.log('error in offline');
         self.emit('error');
     });
 
     this.client.on('error', function (error) {
-        console.log('error in error');
         logger.log.error(error);
         self.emit('error');
     });
@@ -208,6 +204,7 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
  */
 MQTTRegistry.prototype._subscribeWithRetries = function(self, subs, retries, cb) {
     if (Object.keys(subs).length == 0) {
+        cb();
         return;
     }
     self.client.subscribe(subs, function (err, granted) {
@@ -217,7 +214,6 @@ MQTTRegistry.prototype._subscribeWithRetries = function(self, subs, retries, cb)
                 // an error here means the node has been unable to subscribe and will therefore
                 // be unresponsive to requests from other nodes. thus, it should NOT publish
                 // its presence on the network
-                console.log('error when trying to subscribe');
                 self.emit('error');
             } else {
                 setTimeout(self._subscribeWithRetries, constants.mqtt.retryInterval, self, subs, retries - 1, cb);
@@ -272,7 +268,6 @@ MQTTRegistry.prototype._publishWithRetries = function(self, attrs, retries, cb) 
                 if (retries === 0) {
                     error = true;
                     // TODO: do we really need to emit an error if one publication is not successful? What if it is not an important publication
-                    console.log('error when trying to publish');
                     self.emit('error');
                     if (cb) {
                         cb(err);

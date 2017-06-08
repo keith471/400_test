@@ -45,29 +45,31 @@ MDNSRegistry.prototype.registerAndDiscover = function(options) {
 MDNSRegistry.prototype._createAdvertisements = function(attrs) {
     for (var key in attrs) {
         var adName = this.app + '-' + this.machType + '-' + key;
-        var details;
+        var txtRecord;
         if (attrs[key] instanceof Function) {
-            details = JSON.stringify({
-                id: this.id,
-                payload: attrs[key]()
-            });
+            txtRecord = {
+                msg: JSON.stringify({
+                    payload: attrs[key]()
+                })
+            };
         } else {
-            details = JSON.stringify({
-                id: this.id,
-                payload: attrs[key]
-            });
+            txtRecord = {
+                msg: JSON.stringify({
+                    payload: attrs[key]
+                })
+            };
         }
-        this._createAdvertisementWithRetries(this, key, adName, details, constants.mdns.retries);
+        this._createAdvertisementWithRetries(this, key, adName, txtRecord, constants.mdns.retries);
     }
 }
 
 /**
  * Helper
  */
-MDNSRegistry.prototype._createAdvertisementWithRetries = function(self, attr, adName, details, retries) {
-    var ad = mdns.createAdvertisement(mdns.tcp(adName), self.port, {name: details}, function(err, service) {
+MDNSRegistry.prototype._createAdvertisementWithRetries = function(self, attr, adName, txtRecord, retries) {
+    var ad = mdns.createAdvertisement(mdns.tcp(adName), self.port, {name: this.id, txtRecord: txtRecord}, function(err, service) {
         if (err) {
-            self._handleError(self, err, ad, attr, adName, details, retries);
+            self._handleError(self, err, ad, attr, adName, txtRecord, retries);
         } else {
             self.ads[attr] = ad;
         }
@@ -78,8 +80,7 @@ MDNSRegistry.prototype._createAdvertisementWithRetries = function(self, attr, ad
 /**
  * helper function for handling advertisement errors
  */
-MDNSRegistry.prototype._handleError = function(self, err, ad, attr, adName, details, retries) {
-    console.log('err: ' + err);
+MDNSRegistry.prototype._handleError = function(self, err, ad, attr, adName, txtRecord, retries) {
     switch (err.errorCode) {
         // if the error is unknown, then the mdns daemon may currently be down,
         // so try again in some number of seconds
@@ -91,7 +92,7 @@ MDNSRegistry.prototype._handleError = function(self, err, ad, attr, adName, deta
                 ad.stop();
                 self.emit('error');
             } else {
-                setTimeout(self._createAdvertisementWithRetries, constants.mdns.retryInterval, self, attr, adName, details, retries - 1);
+                setTimeout(self._createAdvertisementWithRetries, constants.mdns.retryInterval, self, attr, adName, txtRecord, retries - 1);
             }
             break;
         default:
@@ -146,15 +147,13 @@ MDNSRegistry.prototype._browse = function(attr, machType, event) {
     var self = this;
 
     browser.on('serviceUp', function(service) {
-        var details = JSON.parse(service.name);
-
         // ignore our own services
-        if (details.id == self.id) {
+        if (service.name == self.id) {
             return;
         }
 
         // emit a discovery event!
-        self.emit('discovery', attr, event, details.id, details.payload);
+        self.emit('discovery', attr, event, service.name, JSON.parse(service.txtRecord.msg).payload);
     });
 
     browser.start();
@@ -171,20 +170,17 @@ MDNSRegistry.prototype._browseForStatus = function(machType, events) {
     var self = this;
 
     browser.on('serviceUp', function(service) {
-        var details = JSON.parse(service.name);
-
         // ignore our own services
-        if (details.id == self.id) {
+        if (service.name == self.id) {
             return;
         }
 
         // emit a node online event!
-        self.emit('discovery', 'status', events.online, details.id, details.payload);
+        self.emit('discovery', 'status', events.online, service.name, JSON.parse(service.txtRecord.msg).payload);
     });
 
     browser.on('serviceDown', function(service) {
-        var details = JSON.parse(service.name);
-        self.emit('discovery', 'status', events.offline, details.id, 'offline');
+        self.emit('discovery', 'status', events.offline, service.name, 'offline');
     });
 
     browser.start();

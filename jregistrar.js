@@ -102,6 +102,7 @@ function Registrar(app, machType, id, port) {
     this.mqttRegistry = new MQTTRegistry(app, machType, id, port, subQos, pubQos);
     this.mdnsRegistry = new MDNSRegistry(app, machType, id, port);
     this.localRegistry = new LocalRegistry(app, machType, id, port);
+    this.started = false;
 
     // store discoveries here so that we can easily check for duplicates
     this.discoveries = {};
@@ -115,10 +116,8 @@ function Registrar(app, machType, id, port) {
     var attrs = {
         status: function() {
             return {
-                payload: {
-                    port: port,
-                    ip: getIPv4Address()
-                }
+                port: port,
+                ip: getIPv4Address()
             };
         }
     };
@@ -228,6 +227,7 @@ Registrar.prototype.registerAndDiscover = function(options) {
     this.mqttRegistry.registerAndDiscover(options);
     this.mdnsRegistry.registerAndDiscover(options);
     this.localRegistry.registerAndDiscover(options);
+    this.started = true;
 }
 
 
@@ -282,10 +282,17 @@ Registrar.prototype._retry = function(self, protocol) {
 Registrar.prototype.addAttributes = function(attrs) {
     // error handling
     this._checkAttributes(attrs);
-    // add the attributes on each protocol
-    this.mqttRegistry.announceAttributes(attrs);
-    this.mdnsRegistry.announceAttributes(attrs);
-    this.localRegistry.announceAttributes(attrs);
+    if (this.started) {
+        // announce the attributes on each protocol
+        this.mqttRegistry.announceAttributes(attrs);
+        this.mdnsRegistry.announceAttributes(attrs);
+        this.localRegistry.announceAttributes(attrs);
+    } else {
+        // add the attributes on each protocol
+        this.mqttRegistry.addAttributes(attrs);
+        this.mdnsRegistry.addAttributes(attrs);
+        this.localRegistry.addAttributes(attrs);
+    }
 }
 
 Registrar.prototype.removeAttributes = function(attrs) {

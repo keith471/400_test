@@ -22,7 +22,7 @@ module.exports = Object.freeze({
             LOCAL: 1
         },
         localhost: '127.0.0.1',
-        retryInterval: 10000 // 10 seconds for testing; a better value is probably on the order of a few minutes
+        retryInterval: 30000 // 30 seconds for testing; a better value is probably on the order of a few minutes
     },
 
     mqtt: {

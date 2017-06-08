@@ -49,7 +49,7 @@ LocalRegistry.prototype.registerAndDiscover = function(options) {
     // initialize the local storage
     var self = this;
     this._initLocalStorage(this, function() {
-        self._kickStartCheckIns(self, this.attributes);
+        self._kickStartCheckIns(self, self.attributes);
         self._kickStartScanning(self);
     });
 }
@@ -212,6 +212,9 @@ LocalRegistry.prototype._scan = function(self) {
             self._makeDiscoveries(self, machs, self.attributesToDiscover.cloud);
         }
     }
+
+    // update when we last scanned
+    self.lastScanAt = Date.now();
 }
 
 LocalRegistry.prototype._makeDiscoveries = function(self, machs, dattrs) {

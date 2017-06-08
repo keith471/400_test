@@ -1,9 +1,7 @@
 # TODO
 
 - TEST!!!
-- for some reason, fogs aren't discovering clouds,
-- and ip and port are undefined for a status discovery
-    - my guess: need to bind this to the function...though doesn't explain why getIPv4Address is not working...
+    - test rest of api functions like add and remove attributes, stop discovering, etc.
 
 **Improved structure**
 - there is a single discovery event, `discovery`, that all Registries call for any discovery.
