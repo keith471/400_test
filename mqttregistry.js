@@ -17,6 +17,31 @@ function MQTTRegistry(app, machType, id, port, subQos, pubQos) {
     this.attrsToRemove = {};
     // topics to unsubscribe from the next time we connect
     this.topicsToUnsubscribeFrom = [];
+
+    // attributes that have already been published
+    this.publishedAttrs = {};
+    // attributes that have already been subscribed to
+    this.subscribedAttrs = {
+        device: {},
+        fog: {},
+        cloud: {}
+    };
+    // attributes to be published on (re)connection
+    this.attrsToPublish = {};
+    // attributes to remove when reconnecting
+    this.attrsToRemove = [];
+    // attributes to subscribe to on (re)connection
+    this.attrsToSubTo = {
+        device: {},
+        fog: {},
+        cloud: {}
+    }
+    // attributes to unsubscribe from on reconnection
+    this.attributesToUnsubFrom = {
+        device: [],
+        fog: [],
+        cloud: []
+    }
 }
 
 /* MQTTRegistry inherits from Registry */

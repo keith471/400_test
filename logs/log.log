@@ -328,3 +328,6 @@
 {"name":"name","hostname":"Keiths-MacBook-Pro.local","pid":26734,"level":30,"msg":"fog d1ac6a63-6b3c-40d2-abb2-f175998cd93b subscribed to [{\"topic\":\"name/cloud/+/status\",\"qos\":1}]","time":"2017-06-07T19:13:05.762Z","v":0}
 {"name":"name","hostname":"Keiths-MacBook-Pro.local","pid":26731,"level":30,"msg":"device 60196d81-abb6-447c-a8d1-b337a41acc7c subscribed to [{\"topic\":\"name/fog/+/status\",\"qos\":0}]","time":"2017-06-07T19:13:05.762Z","v":0}
 {"name":"name","hostname":"Keiths-MacBook-Pro.local","pid":26723,"level":30,"msg":"device e3f5f18f-e7cb-436a-8553-283617268fcc subscribed to [{\"topic\":\"name/fog/+/status\",\"qos\":0}]","time":"2017-06-07T19:13:05.762Z","v":0}
+{"name":"name","hostname":"Keiths-MacBook-Pro.local","pid":29623,"level":30,"msg":"device 87368111-81ba-4aff-a990-794ee17e23b9 subscribed to [{\"topic\":\"name/fog/+/status\",\"qos\":0}]","time":"2017-06-08T04:20:30.570Z","v":0}
+{"name":"name","hostname":"Keiths-MacBook-Pro.local","pid":29625,"level":30,"msg":"fog 9f3dbf35-4e45-4476-957a-a89b81538529 subscribed to [{\"topic\":\"name/cloud/+/status\",\"qos\":1}]","time":"2017-06-08T04:20:34.330Z","v":0}
+{"name":"name","hostname":"Keiths-MacBook-Pro.local","pid":29628,"level":30,"msg":"cloud 64717dfc-e8dc-4fc2-a20d-145593a4932b subscribed to undefined","time":"2017-06-08T04:20:40.334Z","v":0}
