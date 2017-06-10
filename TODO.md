@@ -1,6 +1,6 @@
 # TODO
 
-- rework mdns and local storage
+- rework local storage
 
 - TEST!!!
     - test rest of api functions like add and remove attributes, stop discovering, etc.

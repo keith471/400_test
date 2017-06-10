@@ -24,13 +24,11 @@ MDNSRegistry.prototype.constructor = MDNSRegistry;
 MDNSRegistry.prototype.registerAndDiscover = function(options) {
     // add any new attributes or desired discoveries to the existing ones
     if (options !== undefined) {
-        // parse options
-        // attributes
-        this.addAttributes(options.attributes);
-        // attributesToDiscover
-        this.addAttributesToDiscover(options.attributesToDiscover);
+        this.addAttributes(options.attrsToAdd);
+        this.addAttributesToDiscover(options.attrsToDiscover);
     }
 
+    // TODO fix
     this._createAdvertisements(this.attributes);
     this._browseForAttributes(this.attributesToDiscover);
 }
@@ -43,23 +41,28 @@ MDNSRegistry.prototype.registerAndDiscover = function(options) {
  * Creates advertisements for the provided attributes
  */
 MDNSRegistry.prototype._createAdvertisements = function(attrs) {
-    for (var key in attrs) {
-        var adName = this.app + '-' + this.machType + '-' + key;
+    for (var attr in attrs) {
+        // stop advertisement of existing attr (we'll just replace it)
+        if (this.ads[attr]) {
+            this.ads[attr].stop();
+            delete this.ads[attr];
+        }
+        var adName = this.app + '-' + this.machType + '-' + attr;
         var txtRecord;
-        if (attrs[key] instanceof Function) {
+        if (attrs[attr] instanceof Function) {
             txtRecord = {
                 msg: JSON.stringify({
-                    payload: attrs[key]()
+                    payload: attrs[attr]()
                 })
             };
         } else {
             txtRecord = {
                 msg: JSON.stringify({
-                    payload: attrs[key]
+                    payload: attrs[attr]
                 })
             };
         }
-        this._createAdvertisementWithRetries(this, key, adName, txtRecord, constants.mdns.retries);
+        this._createAdvertisementWithRetries(this, attr, adName, txtRecord, constants.mdns.retries);
     }
 }
 
@@ -83,23 +86,25 @@ MDNSRegistry.prototype._createAdvertisementWithRetries = function(self, attr, ad
 MDNSRegistry.prototype._handleError = function(self, err, ad, attr, adName, txtRecord, retries) {
     switch (err.errorCode) {
         // if the error is unknown, then the mdns daemon may currently be down,
-        // so try again in some number of seconds
+        // so try again after some time
         case mdns.kDNSServiceErr_Unknown:
             logger.log.error('Unknown service error: ' + err);
             if (retries === 0) {
                 logger.log.warning('Exhaused all advertisement retries.');
                 // make sure the ad is stopped
                 ad.stop();
-                self.emit('error');
+                // TODO replace by emitting the specific ad that failed - so that it can be retried later
+                // self.emit('error');
             } else {
                 setTimeout(self._createAdvertisementWithRetries, constants.mdns.retryInterval, self, attr, adName, txtRecord, retries - 1);
             }
             break;
         default:
-            logger.log.error('Unhandled service error: ' + err + '. Abandoning mDNS.');
+            logger.log.error('Unhandled service error: ' + err);
             // make sure the ad is stopped
             ad.stop();
-            self.emit('error');
+            // TODO replace by emitting the specific ad that failed - so that it can be retried later
+            //self.emit('error');
     }
 }
 
@@ -112,26 +117,38 @@ MDNSRegistry.prototype._handleError = function(self, err, ad, attr, adName, txtR
  */
 MDNSRegistry.prototype._browseForAttributes = function(dattrs) {
     for (var attr in dattrs.device) {
-        if (attr === 'status') {
-            this._browseForStatus(constants.globals.NodeType.DEVICE, dattrs.device.status);
+        if (!this.browsers.device[attr]) {
+            if (attr === 'status') {
+                this._browseForStatus(constants.globals.NodeType.DEVICE, dattrs.device.status);
+            } else {
+                this._browse(attr, constants.globals.NodeType.DEVICE, dattrs.device[attr]);
+            }
         } else {
-            this._browse(attr, constants.globals.NodeType.DEVICE, dattrs.device[attr]);
+            this.browsers.device[attr].start();
         }
     }
 
     for (var attr in dattrs.fog) {
-        if (attr === 'status') {
-            this._browseForStatus(constants.globals.NodeType.FOG, dattrs.fog.status);
+        if (!this.browsers.fog[attr]) {
+            if (attr === 'status') {
+                this._browseForStatus(constants.globals.NodeType.FOG, dattrs.fog.status);
+            } else {
+                this._browse(attr, constants.globals.NodeType.FOG, dattrs.fog[attr]);
+            }
         } else {
-            this._browse(attr, constants.globals.NodeType.FOG, dattrs.fog[attr]);
+            this.browsers.fog[attr].start();
         }
     }
 
     for (var attr in dattrs.cloud) {
-        if (attr === 'status') {
-            this._browseForStatus(constants.globals.NodeType.CLOUD, dattrs.cloud.status);
+        if (!this.browsers.cloud[attr]) {
+            if (attr === 'status') {
+                this._browseForStatus(constants.globals.NodeType.CLOUD, dattrs.cloud.status);
+            } else {
+                this._browse(attr, constants.globals.NodeType.CLOUD, dattrs.cloud[attr]);
+            }
         } else {
-            this._browse(attr, constants.globals.NodeType.CLOUD, dattrs.cloud[attr]);
+            this.browsers.cloud[attr].start();
         }
     }
 }
@@ -214,67 +231,50 @@ MDNSRegistry.prototype._getIp = function(addresses) {
 // Add and discover attributes
 //==============================================================================
 
-MDNSRegistry.prototype.announceAttributes = function(attrs) {
-    this.addAttributes(attrs);
-    // TODO: could check that there isn't any crossover between attrs and this.attributes
+/**
+ * Just an alias for _createAdertisements, i.e. adds attributes by starting ads
+ */
+MDNSRegistry.prototype.addAttributes = function(attrs) {
     this._createAdvertisements(attrs);
 }
 
-MDNSRegistry.prototype.addAttributes = function(attrs) {
-    for (var attr in attrs) {
-        this.attributes[attr] = attrs[attr];
-    }
-}
-
+/**
+ * Removes attributes by stopping the advertisements
+ */
 MDNSRegistry.prototype.removeAttributes = function(attrs) {
     for (var i = 0; i < attrs.length; i++) {
-        // remove from this.attributes
-        delete this.attributes[attrs[i]];
         // stop and remove the advertisement
-        this.ads[attrs[i]].stop();
-        delete this.ads[attrs[i]];
+        if (this.ads[attrs[i]]) {
+            this.ads[attrs[i]].stop();
+            // we delete the ad object because even if we start advertising with the
+            // same service name in the future, the value we advertise may be different
+            delete this.ads[attrs[i]];
+        }
     }
 }
 
+/**
+ * Alias for _browseForAttributes, i.e. discovers attributes by starting browsers
+ */
 MDNSRegistry.prototype.discoverAttributes = function(dattrs) {
-    this.addAttributesToDiscover(dattrs);
-    // TODO: could check that there isn't any crossover between dattrs and this.attributesToDiscover
     this._browseForAttributes(dattrs);
 }
 
-MDNSRegistry.prototype.addAttributesToDiscover = function(dattrs) {
-    for (var key in dattrs.device) {
-        this.attributesToDiscover.device[key] = dattrs.device[key];
-    }
-
-    for (var key in dattrs.fog) {
-        this.attributesToDiscover.fog[key] = dattrs.fog[key];
-    }
-
-    for (var key in dattrs.cloud) {
-        this.attributesToDiscover.cloud[key] = dattrs.cloud[key];
-    }
-}
-
+/**
+ * Stops making discoveries by stopping browsers
+ */
 MDNSRegistry.prototype.stopDiscoveringAttributes = function(dattrs) {
     for (var i = 0; i < dattrs.device.length; i++) {
-        // remove from this.attributesToDiscover.device
-        delete this.attributesToDiscover.device[dattrs.device[i]];
-        // stop and remove the browser
+        // stop the browser
         this.browsers.device[dattrs.device[i]].stop();
-        delete this.browsers.device[dattrs.device[i]];
     }
 
     for (var i = 0; i < dattrs.fog.length; i++) {
-        delete this.attributesToDiscover.fog[dattrs.fog[i]];
         this.browsers.fog[dattrs.fog[i]].stop();
-        delete this.browsers.fog[dattrs.fog[i]];
     }
 
     for (var i = 0; i < dattrs.cloud.length; i++) {
-        delete this.attributesToDiscover.cloud[dattrs.cloud[i]];
         this.browsers.cloud[dattrs.cloud[i]].stop();
-        delete this.browsers.cloud[dattrs.cloud[i]];
     }
 }
 
@@ -282,6 +282,7 @@ MDNSRegistry.prototype.stopDiscoveringAttributes = function(dattrs) {
  * mDNS cleanup
  * stops all advertising and browsing
  */
+/*
 MDNSRegistry.prototype.quit = function() {
     // stop ads
     for (var attr in this.ads) {
@@ -301,6 +302,7 @@ MDNSRegistry.prototype.quit = function() {
         this.browsers.cloud[attr].stop();
     }
 }
+*/
 
 /* exports */
 module.exports = MDNSRegistry;

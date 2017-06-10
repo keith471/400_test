@@ -233,12 +233,14 @@ Registrar.prototype.registerAndDiscover = function(options) {
             options.attrsToDiscover = this._checkAndReformatDiscoverAttributes(options.attrsToDiscover);
         }
     }
-    this.mqttRegistry.registerAndDiscover(options);
-    //this.mdnsRegistry.registerAndDiscover(options);
+    //this.mqttRegistry.registerAndDiscover(options);
+    this.mdnsRegistry.registerAndDiscover(options);
     //this.localRegistry.registerAndDiscover(options);
 }
 
-
+/**
+ * Upon receipt of a discovery event, pass it onto the rest of the application if it is not a duplicate
+ */
 Registrar.prototype._respondToDiscoveryEvent = function(self, attr, event, nodeId, value) {
     if (!self._isDuplicate(self, attr, nodeId, value)) {
         self._updateDiscoveries(self, attr, nodeId, value);
