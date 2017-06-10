@@ -10,14 +10,6 @@ function Registry(app, machType, id, port) {
     this.machType = machType;
     this.id = id;
     this.port = port;
-    // discoverable attributes of the node
-    this.attributes = {};
-    // attributes of other nodes that this node is discovering
-    this.attributesToDiscover = {
-        device: {},
-        fog: {},
-        cloud: {}
-    };
 }
 
 /* Registry inherits from EventEmitter */

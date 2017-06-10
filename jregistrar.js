@@ -234,8 +234,8 @@ Registrar.prototype.registerAndDiscover = function(options) {
         }
     }
     //this.mqttRegistry.registerAndDiscover(options);
-    this.mdnsRegistry.registerAndDiscover(options);
-    //this.localRegistry.registerAndDiscover(options);
+    //this.mdnsRegistry.registerAndDiscover(options);
+    this.localRegistry.registerAndDiscover(options);
 }
 
 /**
