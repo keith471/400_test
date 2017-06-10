@@ -102,7 +102,6 @@ function Registrar(app, machType, id, port) {
     this.mqttRegistry = new MQTTRegistry(app, machType, id, port, subQos, pubQos);
     this.mdnsRegistry = new MDNSRegistry(app, machType, id, port);
     this.localRegistry = new LocalRegistry(app, machType, id, port);
-    this.started = false;
 
     // store discoveries here so that we can easily check for duplicates
     this.discoveries = {};
@@ -165,6 +164,11 @@ function Registrar(app, machType, id, port) {
     var self = this;
 
     // listen for mqtt errors
+    // TODO: no need for this, since we automatically try to reconnect. We could have the mqtt registry
+    // emit an error when a specific subscription or publication fails, and then set a timer to retry it
+    // If we don't do this, then the sub or pub won't be retried until the client disconnects and then reconnects,
+    // which cloud be never if its connection to the broker is good
+    /*
     this.mqttRegistry.on('error', function() {
         console.log('mqtt error');
         // mqtt cleanup
@@ -173,14 +177,19 @@ function Registrar(app, machType, id, port) {
             setTimeout(self._retry, globals.retryInterval, self, globals.Protocol.MQTT);
         });
     });
+    */
 
     // listen for mdns errors
+    // TODO no need for this, since ads and browsers act independently. If and ad or browser fails, then we can emit
+    // a specific event for the incident and then start a timer to retry.
+    /*
     this.mdnsRegistry.on('error', function() {
         console.log('mdns error');
         // mdns cleanup
         self.mdnsRegistry.quit();
         setTimeout(self._retry, globals.retryInterval, self, globals.Protocol.MDNS);
     });
+    */
 
     // listen for discoveries via MQTT, mDNS, or local storage
     this.mqttRegistry.on('discovery', function(attr, event, nodeId, value) {
@@ -216,18 +225,17 @@ Registrar.prototype.registerAndDiscover = function(options) {
             throw new Error('options must be an object - see the docs');
         }
 
-        if (options.attributes !== undefined) {
-            this._checkAttributes(options.attributes);
+        if (options.attrsToAdd !== undefined) {
+            this._checkAttributes(options.attrsToAdd);
         }
 
-        if (options.discoverAttributes !== undefined) {
-            options.discoverAttributes = this._checkAndReformatDiscoverAttributes(options.discoverAttributes);
+        if (options.attrsToDiscover !== undefined) {
+            options.attrsToDiscover = this._checkAndReformatDiscoverAttributes(options.attrsToDiscover);
         }
     }
     this.mqttRegistry.registerAndDiscover(options);
-    this.mdnsRegistry.registerAndDiscover(options);
-    this.localRegistry.registerAndDiscover(options);
-    this.started = true;
+    //this.mdnsRegistry.registerAndDiscover(options);
+    //this.localRegistry.registerAndDiscover(options);
 }
 
 

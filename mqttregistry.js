@@ -31,13 +31,13 @@ function MQTTRegistry(app, machType, id, port, subQos, pubQos) {
         device: {},
         fog: {},
         cloud: {}
-    }
+    };
     // attributes to unsubscribe from on reconnection
     this.attrsToUnsubFrom = {
         device: {},
         fog: {},
         cloud: {}
-    }
+    };
 }
 
 /* MQTTRegistry inherits from Registry */
@@ -46,73 +46,15 @@ MQTTRegistry.prototype.constructor = MQTTRegistry;
 
 /**
  * Performs basic registration and discovery
- * Designed to be called multiple times if need be
  */
 MQTTRegistry.prototype.registerAndDiscover = function(options) {
 
-
-    for (var key in this.attributes) {
-        // ensure that we republish any attributes determined by a function, for example, status
-        if (this.attributes[key] instanceof Function) {
-            if (newAttrs === null) {
-                newAttrs = {};
-            }
-            newAttrs[key] = this.attributes[key];
+    if (options) {
+        if (options.attrsToAdd) {
+            this.addAttributes(options.attrsToAdd);
         }
-        oldAttrs[key] = this.attributes[key];
-    }
-
-
-    for (var key in this.attributesToDiscover.device) {
-        oldSubs[this.app + '/device/+/' + key] = this.subQos;
-    }
-
-    for (var key in this.attributesToDiscover.fog) {
-        oldSubs[this.app + '/fog/+/' + key] = this.subQos;
-    }
-
-    for (var key in this.attributesToDiscover.cloud) {
-        oldSubs[this.app + '/cloud/+/' + key] = this.subQos;
-    }
-
-    if (options !== undefined) {
-        // parse options
-        // attributes
-        for (var key in options.attributes) {
-            // add to this.attributes
-            this.attributes[key] = options.attributes[key];
-            // add to newAttrs
-            if (newAttrs === null) {
-                newAttrs = {};
-            }
-            newAttrs[key] = options.attributes[key];
-        }
-
-        // attributesToDiscover
-        for (var key in options.attributesToDiscover.device) {
-            // add to this.attributesToDiscover
-            this.attributesToDiscover.device[key] = options.attributesToDiscover.device[key];
-            // add to newSubs
-            if (newSubs === null) {
-                newSubs = {};
-            }
-            newSubs[this.app + '/device/+/' + key] = this.subQos;
-        }
-
-        for (var key in options.attributesToDiscover.fog) {
-            this.attributesToDiscover.fog[key] = options.attributesToDiscover.fog[key];
-            if (newSubs === null) {
-                newSubs = {};
-            }
-            newSubs[this.app + '/fog/+/' + key] = this.subQos;
-        }
-
-        for (var key in options.attributesToDiscover.cloud) {
-            this.attributesToDiscover.cloud[key] = options.attributesToDiscover.cloud[key];
-            if (newSubs === null) {
-                newSubs = {};
-            }
-            newSubs[this.app + '/cloud/+/' + key] = this.subQos;
+        if (options.attrsToDiscover) {
+            this.discoverAttributes(options.attrsToDiscover);
         }
     }
 
@@ -120,70 +62,79 @@ MQTTRegistry.prototype.registerAndDiscover = function(options) {
     this.client = mqtt.connect(constants.mqtt.brokerUrl, this._getConnectionOptions());
 
     // set up event listeners for the client
-    this._prepareForEvents(newSubs, oldSubs, newAttrs, oldAttrs);
+    this._prepareForEvents();
 }
 
 /**
  * A general helper for listening for events from the MQTT client
  */
-MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, oldAttrs) {
+MQTTRegistry.prototype._prepareForEvents = function() {
     var self = this;
 
     /* connect event emitted on successful connection or reconnection */
     this.client.on('connect', function (connack) {
-        // if first connection, then set up subscriptions
         if (!connack.sessionPresent) {
-            // make subscriptions
-            if (newSubs !== null) {
-                // add newSubs to oldSubs
-                for (var key in newSubs) {
-                    oldSubs[key] = newSubs[key];
-                }
+            console.log('new session');
+            /*
+             * session is not present - subscriptions start from scratch but
+             * old publications could still be persisted on the broker
+             */
+            // reset attrsToUnsubFrom
+            self.attrsToUnsubFrom = {
+                device: {},
+                fog: {},
+                cloud: {}
+            };
+            // subscribe
+            // combine subscribedAttrs and attrsToSubTo so that we can subscribe to all of them
+            for (var attr in self.subscribedAttrs.device) {
+                self.attrsToSubTo.device[attr] = self.subscribedAttrs.device[attr];
             }
-            self._subscribeWithRetries(self, oldSubs, constants.mqtt.retries, function(granted) {
-                logger.log.info(self.machType + ' ' + self.id + ' subscribed to ' + JSON.stringify(granted));
-                // make publications
-                if (newAttrs !== null) {
-                    // add new attrs to old attrs
-                    for (var key in newAttrs) {
-                        oldAttrs[key] = newAttrs[key];
-                    }
-                }
-                self._publishWithRetries(self, oldAttrs, constants.mqtt.retries);
-            });
+            for (var attr in self.subscribedAttrs.fog) {
+                self.attrsToSubTo.fog[attr] = self.subscribedAttrs.fog[attr];
+            }
+            for (var attr in self.subscribedAttrs.cloud) {
+                self.attrsToSubTo.cloud[attr] = self.subscribedAttrs.cloud[attr];
+            }
+            self.subscribedAttrs = {
+                device: {},
+                fog: {},
+                cloud: {}
+            };
+            self._subscribeWithRetries(self, self.attrsToSubTo, constants.mqtt.retries);
+            // publish
+            for (var attr in self.publishedAttrs) {
+                self.attrsToPublish[attr] = self.publishedAttrs[attr];
+            }
+            self.publishedAttrs = {};
+            for (var attr in self.attrsToPublish) {
+                self._publishWithRetries(self, attr, self.attrsToPublish[attr], constants.mqtt.retries);
+            }
+            // unpublish
+            for (var attr in self.attrsToRemove) {
+                self._unpublishWithRetries(self, attr, constants.mqtt.retries);
+            }
         } else {
-            // our connection is already present, meaning that the broker is still aware of our old subscriptions
-            // so, we make the new ones and then publish the new attrs (or at the very least, an online status)
-            // we also need to make null publications for any attrsToRemove and
-            // we need to unsubscribe from any topicsToUnsubscribeFrom
-            if (newSubs !== null) {
-                self._subscribeWithRetries(self, newSubs, constants.mqtt.retries, function(granted) {
-                    logger.log.info(self.machType + ' ' + self.id + ' subscribed to ' + JSON.stringify(granted));
-                    // make publications
-                    if (newAttrs === null) {
-                        newAttrs = {};
-                    }
-                    self._publishWithRetries(self, newAttrs, constants.mqtt.retries);
-                    // make null publications for any attributes to remove
-                    self._publishWithRetries(self, self.attrsToRemove, constants.mqtt.retries, function(err) {
-                        if (!err) {
-                            // reset attrsToRemove
-                            self.attrsToRemove = {};
-                        }
-                    });
-                    // unsubscribe from things if needed
-                    self._unsubscribe(self, self.topicsToUnsubscribeFrom, function(err) {
-                        if (!err) {
-                            // reset topicsToUnsubscribeFrom
-                            self.topicsToUnsubscribeFrom = [];
-                        }
-                    });
-                });
-            } else {
-                if (newAttrs === null) {
-                    newAttrs = {};
-                }
-                self._publishWithRetries(self, newAttrs, constants.mqtt.retries);
+            /*
+             * session is present - old subscriptions are still there so we only need to subscribe to new ones
+             * but we also need to unsubscribe from attrsToUnsubFrom
+             * we make no assumptions about the state of publications
+             */
+            // subscribe
+            self._subscribeWithRetries(self, self.attrsToSubTo, constants.mqtt.retries);
+            // unsubscribe
+            self._unsubscribeWithRetries(self, self.attrsToRemove, constants.mqtt.retries);
+            // publish
+            for (var attr in self.publishedAttrs) {
+                self.attrsToPublish[attr] = self.publishedAttrs[attr];
+            }
+            self.publishedAttrs = {};
+            for (var attr in self.attrsToPublish) {
+                self._publishWithRetries(self, attr, self.attrsToPublish[attr], constants.mqtt.retries);
+            }
+            // unpublish
+            for (var attr in self.attrsToRemove) {
+                self._unpublishWithRetries(self, attr, constants.mqtt.retries);
             }
         }
     });
@@ -207,11 +158,11 @@ MQTTRegistry.prototype._prepareForEvents = function(newSubs, oldSubs, newAttrs, 
     */
 
     this.client.on('offline', function () {
-        self.emit('error');
+        //self.emit('error');
     });
 
     this.client.on('error', function (error) {
-        self.emit('error');
+        //self.emit('error');
     });
 }
 
@@ -227,38 +178,47 @@ MQTTRegistry.prototype._handleMessage = function(self, topic, message) {
     var attr = components[3];
 
     var eventName;
-    if (attr === 'status') {
-        if (message === 'offline') {
-            eventName = self.attributesToDiscover[machType].status.offline;
+    if (self.subscribedAttrs[machType].hasOwnProperty(attr)) {
+        if (attr === 'status') {
+            if (message === 'offline') {
+                eventName = self.subscribedAttrs[machType].status.offline;
+            } else {
+                eventName = self.subscribedAttrs[machType].status.online;
+            }
         } else {
-            eventName = self.attributesToDiscover[machType].status.online;
+            eventName = self.subscribedAttrs[machType][attr];
         }
-    } else {
-        eventName = self.attributesToDiscover[machType][attr];
     }
 
-    self.emit('discovery', attr, eventName, machId, message);
+    if (eventName !== undefined) {
+        self.emit('discovery', attr, eventName, machId, message);
+    } else {
+        console.log('event name is undefined - this may be because we are still awaiting a subscription confirmation for this message');
+    }
 }
 
 /**
  * Helper for setting up subscriptions to the broker with retries
  */
-MQTTRegistry.prototype._subscribeWithRetries = function(self, dattrs, retries) {
-    var subs = [];
+MQTTRegistry.prototype._subscribeWithRetries = function(self, dattrs, retries, cb) {
+    var subs = {};
 
     for (var attr in dattrs.device) {
-        subs[self.app + '/device/' + self.id + '/' + attr] = self.subQos;
+        subs[self.app + '/device/+/' + attr] = self.subQos;
     }
 
     for (var attr in dattrs.fog) {
-        subs[self.app + '/fog/' + self.id + '/' + attr] = self.subQos;
+        subs[self.app + '/fog/+/' + attr] = self.subQos;
     }
 
     for (var attr in dattrs.cloud) {
-        subs[self.app + '/cloud/' + self.id + '/' + attr] = self.subQos;
+        subs[self.app + '/cloud/+/' + attr] = self.subQos;
     }
 
-    if (subs.length === 0) {
+    if (Object.keys(subs).length === 0) {
+        if (cb) {
+            cb();
+        }
         return;
     }
 
@@ -266,6 +226,10 @@ MQTTRegistry.prototype._subscribeWithRetries = function(self, dattrs, retries) {
         if (err) {
             if (retries !== 0) {
                 setTimeout(self._subscribeWithRetries, constants.mqtt.retryInterval, self, dattrs, retries - 1);
+            } else {
+                if (cb) {
+                    cb(err);
+                }
             }
         } else {
             // move attrs from attrsToSubTo to subscribedAttrs
@@ -276,6 +240,9 @@ MQTTRegistry.prototype._subscribeWithRetries = function(self, dattrs, retries) {
                 attr = components[3];
                 self.subscribedAttrs[machType][attr] = dattrs[machType][attr];
                 delete self.attrsToSubTo[machType][attr];
+            }
+            if (cb) {
+                cb();
             }
         }
     });
@@ -296,6 +263,10 @@ MQTTRegistry.prototype._unsubscribeWithRetries = function(self, dattrs, retries)
 
     for (var attr in dattrs.cloud) {
         topics.push(self.app + '/cloud/+/' + dattrs.cloud[attr]);
+    }
+
+    if (topics.length === 0) {
+        return;
     }
 
     self.client.unsubscribe(topics, function(err) {
@@ -535,11 +506,13 @@ MQTTRegistry.prototype.stopDiscoveringAttributes = function(dattrs) {
 /**
  * Closes the client, executing the callback upon completion
  */
+/*
 MQTTRegistry.prototype.quit = function(cb) {
     if (this.client) {
         this.client.end(false, cb);
     }
 }
+*/
 
 /* exports */
 module.exports = MQTTRegistry;

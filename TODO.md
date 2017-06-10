@@ -1,6 +1,5 @@
 # TODO
 
-- rewrite handleMessage, prepareForEvents, and registerAndDiscover
 - rework mdns and local storage
 
 - TEST!!!
