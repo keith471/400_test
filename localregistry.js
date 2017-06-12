@@ -301,16 +301,22 @@ LocalRegistry.prototype.discoverAttributes = function(dattrs) {
  * Stops discovering the specified attributes
  */
 LocalRegistry.prototype.stopDiscoveringAttributes = function(dattrs) {
-    for (var i = 0; i < dattrs.device.length; i++) {
-        delete this.attrsToDiscover.device[dattrs.device[i]];
+    if (dattrs.device) {
+        for (var i = 0; i < dattrs.device.length; i++) {
+            delete this.attrsToDiscover.device[dattrs.device[i]];
+        }
     }
 
-    for (var i = 0; i < dattrs.fog.length; i++) {
-        delete this.attrsToDiscover.fog[dattrs.fog[i]];
+    if (dattrs.fog) {
+        for (var i = 0; i < dattrs.fog.length; i++) {
+            delete this.attrsToDiscover.fog[dattrs.fog[i]];
+        }
     }
 
-    for (var i = 0; i < dattrs.cloud.length; i++) {
-        delete this.attrsToDiscover.cloud[dattrs.cloud[i]];
+    if (dattrs.cloud) {
+        for (var i = 0; i < dattrs.cloud.length; i++) {
+            delete this.attrsToDiscover.cloud[dattrs.cloud[i]];
+        }
     }
 }
 

@@ -264,17 +264,23 @@ MDNSRegistry.prototype.discoverAttributes = function(dattrs) {
  * Stops making discoveries by stopping browsers
  */
 MDNSRegistry.prototype.stopDiscoveringAttributes = function(dattrs) {
-    for (var i = 0; i < dattrs.device.length; i++) {
-        // stop the browser
-        this.browsers.device[dattrs.device[i]].stop();
+    if (dattrs.device) {
+        for (var i = 0; i < dattrs.device.length; i++) {
+            // stop the browser
+            this.browsers.device[dattrs.device[i]].stop();
+        }
     }
 
-    for (var i = 0; i < dattrs.fog.length; i++) {
-        this.browsers.fog[dattrs.fog[i]].stop();
+    if (dattrs.fog) {
+        for (var i = 0; i < dattrs.fog.length; i++) {
+            this.browsers.fog[dattrs.fog[i]].stop();
+        }
     }
 
-    for (var i = 0; i < dattrs.cloud.length; i++) {
-        this.browsers.cloud[dattrs.cloud[i]].stop();
+    if (dattrs.cloud) {
+        for (var i = 0; i < dattrs.cloud.length; i++) {
+            this.browsers.cloud[dattrs.cloud[i]].stop();
+        }
     }
 }
 

@@ -362,14 +362,24 @@ Registrar.prototype._checkAndReformatAttrsToStopDiscovering = function(dattrs) {
             formedAttrs.cloud.push(dattrs[i]);
         }
     } else {
-        this._checkArrayOfStrings(dattrs.all);
-        this._checkArrayOfStrings(dattrs.device);
-        this._checkArrayOfStrings(dattrs.fog);
-        this._checkArrayOfStrings(dattrs.cloud);
-        for (var i = 0; i < dattrs.all.length; i++) {
-            dattrs.device.push(dattrs.all[i]);
-            dattrs.fog.push(dattrs.all[i]);
-            dattrs.cloud.push(dattrs.all[i]);
+        if (dattrs.all) {
+            this._checkArrayOfStrings(dattrs.all);
+        }
+        if (dattrs.device) {
+            this._checkArrayOfStrings(dattrs.device);
+        }
+        if (dattrs.fog) {
+            this._checkArrayOfStrings(dattrs.fog);
+        }
+        if (dattrs.cloud) {
+            this._checkArrayOfStrings(dattrs.cloud);
+        }
+        if (dattrs.all) {
+            for (var i = 0; i < dattrs.all.length; i++) {
+                dattrs.device.push(dattrs.all[i]);
+                dattrs.fog.push(dattrs.all[i]);
+                dattrs.cloud.push(dattrs.all[i]);
+            }
         }
         formedDattrs = dattrs;
     }

@@ -453,48 +453,54 @@ MQTTRegistry.prototype.discoverAttributes = function(dattrs) {
 MQTTRegistry.prototype.stopDiscoveringAttributes = function(dattrs) {
     var unsubs = null;
 
-    for (var i = 0; i < dattrs.device.length; i++) {
-        delete this.attrsToSubTo[dattrs.device[i]];
-        if (this.subscribedAttrs.hasOwnProperty(dattrs.device[i])) {
-            this.attrsToUnsubFrom.device[dattrs.device[i]] = null;
-            if (unsubs === null) {
-                unsubs = {
-                    device: {},
-                    fog: {},
-                    cloud: {}
+    if (dattrs.device) {
+        for (var i = 0; i < dattrs.device.length; i++) {
+            delete this.attrsToSubTo[dattrs.device[i]];
+            if (this.subscribedAttrs.hasOwnProperty(dattrs.device[i])) {
+                this.attrsToUnsubFrom.device[dattrs.device[i]] = null;
+                if (unsubs === null) {
+                    unsubs = {
+                        device: {},
+                        fog: {},
+                        cloud: {}
+                    }
                 }
+                unsubs.device[dattrs.device[i]] = null;
             }
-            unsubs.device[dattrs.device[i]] = null;
         }
     }
 
-    for (var i = 0; i < dattrs.fog.length; i++) {
-        delete this.attrsToSubTo[dattrs.fog[i]];
-        if (this.subscribedAttrs.hasOwnProperty(dattrs.fog[i])) {
-            this.attrsToUnsubFrom.fog[dattrs.fog[i]] = null;
-            if (unsubs === null) {
-                unsubs = {
-                    device: {},
-                    fog: {},
-                    cloud: {}
+    if (dattrs.fog) {
+        for (var i = 0; i < dattrs.fog.length; i++) {
+            delete this.attrsToSubTo[dattrs.fog[i]];
+            if (this.subscribedAttrs.hasOwnProperty(dattrs.fog[i])) {
+                this.attrsToUnsubFrom.fog[dattrs.fog[i]] = null;
+                if (unsubs === null) {
+                    unsubs = {
+                        device: {},
+                        fog: {},
+                        cloud: {}
+                    }
                 }
+                unsubs.fog[dattrs.fog[i]] = null;
             }
-            unsubs.fog[dattrs.fog[i]] = null;
         }
     }
 
-    for (var i = 0; i < dattrs.cloud.length; i++) {
-        delete this.attrsToSubTo[dattrs.cloud[i]];
-        if (this.subscribedAttrs.hasOwnProperty(dattrs.cloud[i])) {
-            this.attrsToUnsubFrom.cloud[dattrs.cloud[i]] = null;
-            if (unsubs === null) {
-                unsubs = {
-                    device: {},
-                    fog: {},
-                    cloud: {}
+    if (dattrs.cloud) {
+        for (var i = 0; i < dattrs.cloud.length; i++) {
+            delete this.attrsToSubTo[dattrs.cloud[i]];
+            if (this.subscribedAttrs.hasOwnProperty(dattrs.cloud[i])) {
+                this.attrsToUnsubFrom.cloud[dattrs.cloud[i]] = null;
+                if (unsubs === null) {
+                    unsubs = {
+                        device: {},
+                        fog: {},
+                        cloud: {}
+                    }
                 }
+                unsubs.cloud[dattrs.cloud[i]] = null;
             }
-            unsubs.cloud[dattrs.cloud[i]] = null;
         }
     }
 

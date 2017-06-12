@@ -60,7 +60,9 @@ if (machType === globals.NodeType.DEVICE) {
     }
 } else if (machType === globals.NodeType.FOG) {
     // since we'll have clouds discover fogs, we don't need fogs to discover clouds
-    
+    reggie.stopDiscoveringAttributes({
+        cloud: ['status']
+    });
 } else {
     // maybe clouds want to discover fogs, and iphone devices
     reggie.discoverAttributes({
