@@ -112,24 +112,21 @@ function Registrar(app, machType, id, port) {
     // set up default attributes, which are the same for devices, fogs, and clouds (i.e. just status)
     // default attributes:
     // status
-    var attrs = {
+    this.addAttributes({
         status: function() {
             return {
                 port: port,
                 ip: getIPv4Address()
             };
         }
-    };
-    this.mqttRegistry.addAttributes(attrs);
-    this.mdnsRegistry.addAttributes(attrs);
-    this.localRegistry.addAttributes(attrs);
+    }, true);
 
     // prep the default discoveries to be made by a node:
     // devices discover fogs and fogs discover clouds
     if (this.machType === globals.NodeType.DEVICE) {
         // default discoveries:
         // devices discover fogs
-        var dattrs = {
+        this.discoverAttributes({
             fog: {
                 status: {
                     online: 'fog-up',
@@ -137,59 +134,24 @@ function Registrar(app, machType, id, port) {
                     // if the status value is `offline`, then we emit fog-down, else we emit fog-up
                 }
             }
-        };
-        this.mqttRegistry.discoverAttributes(dattrs);
-        this.mdnsRegistry.discoverAttributes(dattrs);
-        this.localRegistry.discoverAttributes(dattrs);
+        });
     } else if (this.machType === globals.NodeType.FOG) {
         // default discoveries:
         // fogs discover clouds
-        var dattrs = {
+        this.discoverAttributes({
             cloud: {
                 status: {
                     online: 'cloud-up',
                     offline: 'cloud-down'
                 }
             }
-        };
-        this.mqttRegistry.discoverAttributes(dattrs);
-        this.mdnsRegistry.discoverAttributes(dattrs);
-        this.localRegistry.discoverAttributes(dattrs);
+        });
     } else {
         // no default cloud discoveries
     }
 
     // listen for events from the Registries
-
     var self = this;
-
-    // listen for mqtt errors
-    // TODO: no need for this, since we automatically try to reconnect. We could have the mqtt registry
-    // emit an error when a specific subscription or publication fails, and then set a timer to retry it
-    // If we don't do this, then the sub or pub won't be retried until the client disconnects and then reconnects,
-    // which cloud be never if its connection to the broker is good
-    /*
-    this.mqttRegistry.on('error', function() {
-        console.log('mqtt error');
-        // mqtt cleanup
-        self.mqttRegistry.quit(function() {
-            console.log('quit mqtt registry');
-            setTimeout(self._retry, globals.retryInterval, self, globals.Protocol.MQTT);
-        });
-    });
-    */
-
-    // listen for mdns errors
-    // TODO no need for this, since ads and browsers act independently. If and ad or browser fails, then we can emit
-    // a specific event for the incident and then start a timer to retry.
-    /*
-    this.mdnsRegistry.on('error', function() {
-        console.log('mdns error');
-        // mdns cleanup
-        self.mdnsRegistry.quit();
-        setTimeout(self._retry, globals.retryInterval, self, globals.Protocol.MDNS);
-    });
-    */
 
     // listen for discoveries via MQTT, mDNS, or local storage
     this.mqttRegistry.on('discovery', function(attr, event, nodeId, value) {
@@ -216,26 +178,27 @@ Registrar.prototype.constructor = Registrar;
  * If mDNS also fails, then it will fall back on local storage.
  * options - an optional parameter
  * options include:
- *   attributes: key/value pair as in addAttributes
- *   discoverAttributes: as in discoverAttributes
+ *   attrsToAdd: key/value pair as in this.addAttributes
+ *   attrsToDiscover: as in this.discoverAttributes
  */
 Registrar.prototype.registerAndDiscover = function(options) {
-    if (options !== undefined) {
+    if (options) {
         if (typeof options !== 'object') {
             throw new Error('options must be an object - see the docs');
         }
 
-        if (options.attrsToAdd !== undefined) {
-            this._checkAttributes(options.attrsToAdd);
+        if (options.attrsToAdd) {
+            this.addAttributes(options.attrsToAdd);
         }
 
-        if (options.attrsToDiscover !== undefined) {
-            options.attrsToDiscover = this._checkAndReformatDiscoverAttributes(options.attrsToDiscover);
+        if (options.attrsToDiscover) {
+            this.discoverAttributes(options.attrsToDiscover);
         }
     }
-    //this.mqttRegistry.registerAndDiscover(options);
-    //this.mdnsRegistry.registerAndDiscover(options);
-    this.localRegistry.registerAndDiscover(options);
+
+    this.mqttRegistry.registerAndDiscover();
+    //this.mdnsRegistry.registerAndDiscover();
+    //this.localRegistry.registerAndDiscover();
 }
 
 /**
@@ -289,32 +252,24 @@ Registrar.prototype._retry = function(self, protocol) {
  * Add custom, discoverable attributes to this node
  * attrs is an object of key value pairs
  */
-Registrar.prototype.addAttributes = function(attrs) {
+Registrar.prototype.addAttributes = function(attrs, override) {
     // error handling
-    this._checkAttributes(attrs);
+    if (!override) {
+        this._checkFormOfAttrsToAdd(attrs);
+    }
     // add the attributes on each protocol
     this.mqttRegistry.addAttributes(attrs);
-    this.mdnsRegistry.addAttributes(attrs);
-    this.localRegistry.addAttributes(attrs);
+    //this.mdnsRegistry.addAttributes(attrs);
+    //this.localRegistry.addAttributes(attrs);
 }
 
 Registrar.prototype.removeAttributes = function(attrs) {
     // error handling
-    if (typeof attrs == 'string') {
-        attrs = [attrs];
-    } else if (!(attrs instanceof Array)) {
-        throw new Error('attrs must be a string or an array of strings');
-    }
-
-    for (var i = 0; i < attrs.length; i++) {
-        if (typeof attrs[i] != 'string') {
-            throw new Error('attrs must be a string or an array of strings');
-        }
-    }
-
+    attrs = this._reformatAttrsToRemove(attrs);
+    // remove the attributes on each protocol
     this.mqttRegistry.removeAttributes(attrs);
-    this.mdnsRegistry.removeAttributes(attrs);
-    this.localRegistry.removeAttributes(attrs);
+    //this.mdnsRegistry.removeAttributes(attrs);
+    //this.localRegistry.removeAttributes(attrs);
 }
 
 /**
@@ -330,20 +285,24 @@ Registrar.prototype.removeAttributes = function(attrs) {
  (b) As a shortcut for all, one can simply pass an object of <attr, event> pairs
  */
 Registrar.prototype.discoverAttributes = function(dattrs) {
-    dattrs = this._checkAndReformatDiscoverAttributes(dattrs);
+    dattrs = this._checkAndReformatAttrsToDiscover(dattrs);
     this.mqttRegistry.discoverAttributes(dattrs);
-    this.mdnsRegistry.discoverAttributes(dattrs);
-    this.localRegistry.discoverAttributes(dattrs);
+    //this.mdnsRegistry.discoverAttributes(dattrs);
+    //this.localRegistry.discoverAttributes(dattrs);
 }
 
 Registrar.prototype.stopDiscoveringAttributes = function(dattrs) {
-    dattrs = this._checkAndReformatDiscoverAttributes_stop(dattrs);
+    dattrs = this._checkAndReformatAttrsToStopDiscovering(dattrs);
     this.mqttRegistry.stopDiscoveringAttributes(dattrs);
-    this.mdnsRegistry.stopDiscoveringAttributes(dattrs);
-    this.localRegistry.stopDiscoveringAttributes(dattrs);
+    //this.mdnsRegistry.stopDiscoveringAttributes(dattrs);
+    //this.localRegistry.stopDiscoveringAttributes(dattrs);
 }
 
-Registrar.prototype._checkAndReformatDiscoverAttributes = function(attrs) {
+/**
+ * Checks the format of a set of attributes to discover, and reformats them into the form accepted
+ * by the three registries
+ */
+Registrar.prototype._checkAndReformatAttrsToDiscover = function(attrs) {
     // error handling
     if (typeof attrs !== 'object') {
         throw new Error('you must specity the attributes you want discovered as an object - see the docs');
@@ -354,7 +313,7 @@ Registrar.prototype._checkAndReformatDiscoverAttributes = function(attrs) {
         attrs.device === undefined &&
         attrs.fog === undefined &&
         attrs.cloud === undefined) {
-            this._checkForm(attrs);
+            this._checkFormOfAttrsToDiscover(attrs);
             formedAttrs = {
                 device: {},
                 fog: {},
@@ -366,10 +325,10 @@ Registrar.prototype._checkAndReformatDiscoverAttributes = function(attrs) {
                 formedAttrs.cloud[key] = attrs[key];
             }
     } else {
-        this._checkForm(attrs.all);
-        this._checkForm(attrs.device);
-        this._checkForm(attrs.fog);
-        this._checkForm(attrs.cloud);
+        this._checkFormOfAttrsToDiscover(attrs.all);
+        this._checkFormOfAttrsToDiscover(attrs.device);
+        this._checkFormOfAttrsToDiscover(attrs.fog);
+        this._checkFormOfAttrsToDiscover(attrs.cloud);
         for (var key in attrs.all) {
             attrs.device[key] = attrs.all[key];
             attrs.fog[key] = attrs.all[key];
@@ -380,7 +339,7 @@ Registrar.prototype._checkAndReformatDiscoverAttributes = function(attrs) {
     return formedAttrs;
 }
 
-Registrar.prototype._checkAndReformatDiscoverAttributes_stop = function(dattrs) {
+Registrar.prototype._checkAndReformatAttrsToStopDiscovering = function(dattrs) {
     // error handling
     if (!(dattrs instanceof Object) && !(dattrs instanceof Array)) {
         throw new Error('you must specity the attributes to stop discovering in an object or array - see the docs');
@@ -433,7 +392,7 @@ Registrar.prototype._checkArrayOfStrings = function(arr) {
  * A helper for Registrar.prototype.discoverAttributes;
  * ensures that attrs is an object of <string, string> pairs
  */
-Registrar.prototype._checkForm = function(attrs) {
+Registrar.prototype._checkFormOfAttrsToDiscover = function(attrs) {
     for (var key in attrs) {
         if (key == 'status') {
             // ensure that online and offline events are specified
@@ -464,7 +423,7 @@ Registrar.prototype._checkForm = function(attrs) {
     }
 }
 
-Registrar.prototype._checkAttributes = function(attrs) {
+Registrar.prototype._checkFormOfAttrsToAdd = function(attrs) {
     if (typeof attrs !== 'object') {
         throw new Error('attrs must be an object');
     }
@@ -473,6 +432,22 @@ Registrar.prototype._checkAttributes = function(attrs) {
             throw new Error('the attribute \'' + this.reservedAttrs[i] + '\' is reserved');
         }
     }
+}
+
+Registrar.prototype._reformatAttrsToRemove = function(attrs) {
+    if (typeof attrs == 'string') {
+        attrs = [attrs];
+    } else if (!(attrs instanceof Array)) {
+        throw new Error('attrs must be a string or an array of strings');
+    }
+
+    for (var i = 0; i < attrs.length; i++) {
+        if (typeof attrs[i] != 'string') {
+            throw new Error('attrs must be a string or an array of strings');
+        }
+    }
+
+    return attrs;
 }
 
 Registrar.prototype.getUrl = function() {

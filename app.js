@@ -4,11 +4,12 @@ var Registrar = require('./jregistrar'),
     uuid = require('uuid4'),
     events = require('events');
 
-var machType = process.argv[2] == undefined ? globals.NodeType.DEVICE : process.argv[2],
-    protocol = process.argv[3] == undefined ? globals.Protocol.MQTT : process.argv[3],
-    app = process.argv[4] == undefined ? 'nameyy' : process.argv[3],
-    id = process.argv[5] == undefined ? uuid() : process.argv[4],
-    port = process.argv[6] == undefined ? 1337 : process.argv[5];
+var machType = process.argv[2],
+    phoneType = process.argv[3],
+    phoneNumber = process.argv[4],
+    app = 'myapp',
+    port = 1337,
+    id = uuid();
 
 // don't forget to initialize the logger!
 errLog.init(app, false);
@@ -21,28 +22,70 @@ console.log();
 var reggie = new Registrar(app, machType, id, port);
 
 //------------------------------------------------------------------------------
-// Device nodes will receive these events
+// Default discoveries
 //------------------------------------------------------------------------------
 
-reggie.on('fog-up', function(fogId, connInfo) {
-    console.log('FOG UP: id: ' + fogId + ', ip: ' + connInfo.ip + ', port: ' + connInfo.port);
-});
+if (machType === globals.NodeType.DEVICE) {
+    reggie.on('fog-up', function(fogId, connInfo) {
+        console.log('FOG UP: id: ' + fogId + ', ip: ' + connInfo.ip + ', port: ' + connInfo.port);
+    });
 
-reggie.on('fog-down', function(fogId) {
-    console.log('FOG DOWN: id: ' + fogId);
-});
+    reggie.on('fog-down', function(fogId) {
+        console.log('FOG DOWN: id: ' + fogId);
+    });
+} else if (machType === globals.NodeType.FOG) {
+    reggie.on('cloud-up', function(cloudId, connInfo) {
+        console.log('CLOUD UP: id: ' + cloudId + ', ip: ' + connInfo.ip + ', port: ' + connInfo.port);
+
+    });
+
+    reggie.on('cloud-down', function(cloudId) {
+        console.log('CLOUD DOWN: id: ' + cloudId);
+    });
+}
 
 //------------------------------------------------------------------------------
-// Fog nodes will receive these events
+// Custom attributes/discoveries
 //------------------------------------------------------------------------------
 
-reggie.on('cloud-up', function(cloudId, connInfo) {
-    console.log('CLOUD UP: id: ' + cloudId + ', ip: ' + connInfo.ip + ', port: ' + connInfo.port);
+if (machType === globals.NodeType.DEVICE) {
+    if (phoneType === 'iPhone') {
+        reggie.addAttributes({
+            iPhone: phoneNumber
+        });
+    } else if (phoneType === 'Android') {
+        reggie.addAttributes({
+            android: phoneNumber
+        });
+    }
+} else if (machType === globals.NodeType.FOG) {
+    // since we'll have clouds discover fogs, we don't need fogs to discover clouds
+    
+} else {
+    // maybe clouds want to discover fogs, and iphone devices
+    reggie.discoverAttributes({
+        device: {
+            iPhone: 'iPhone'
+        },
+        fog: {
+            status: {
+                online: 'fog-up',
+                offline: 'fog-down'
+            }
+        }
+    });
 
-});
+    reggie.on('fog-up', function(fogId, connInfo) {
+        console.log('FOG UP: id: ' + fogId + ', ip: ' + connInfo.ip + ', port: ' + connInfo.port);
+    });
 
-reggie.on('cloud-down', function(cloudId) {
-    console.log('CLOUD DOWN: id: ' + cloudId);
-});
+    reggie.on('fog-down', function(fogId) {
+        console.log('FOG DOWN: id: ' + fogId);
+    });
+
+    reggie.on('iPhone', function(deviceId, phoneNumber) {
+        console.log('DEVICE ' + deviceId + ' is an iPhone with number ' + phoneNumber);
+    });
+}
 
 reggie.registerAndDiscover();
