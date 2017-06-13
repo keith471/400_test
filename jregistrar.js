@@ -196,8 +196,8 @@ Registrar.prototype.registerAndDiscover = function(options) {
         }
     }
 
-    //this.mqttRegistry.registerAndDiscover();
-    //this.mdnsRegistry.registerAndDiscover();
+    this.mqttRegistry.registerAndDiscover();
+    this.mdnsRegistry.registerAndDiscover();
     this.localRegistry.registerAndDiscover();
 }
 
@@ -258,8 +258,8 @@ Registrar.prototype.addAttributes = function(attrs, override) {
         this._checkFormOfAttrsToAdd(attrs);
     }
     // add the attributes on each protocol
-    //this.mqttRegistry.addAttributes(attrs);
-    //this.mdnsRegistry.addAttributes(attrs);
+    this.mqttRegistry.addAttributes(attrs);
+    this.mdnsRegistry.addAttributes(attrs);
     this.localRegistry.addAttributes(attrs);
 }
 
@@ -267,8 +267,8 @@ Registrar.prototype.removeAttributes = function(attrs) {
     // error handling
     attrs = this._reformatAttrsToRemove(attrs);
     // remove the attributes on each protocol
-    //this.mqttRegistry.removeAttributes(attrs);
-    //this.mdnsRegistry.removeAttributes(attrs);
+    this.mqttRegistry.removeAttributes(attrs);
+    this.mdnsRegistry.removeAttributes(attrs);
     this.localRegistry.removeAttributes(attrs);
 }
 
@@ -286,15 +286,15 @@ Registrar.prototype.removeAttributes = function(attrs) {
  */
 Registrar.prototype.discoverAttributes = function(dattrs) {
     dattrs = this._checkAndReformatAttrsToDiscover(dattrs);
-    //this.mqttRegistry.discoverAttributes(dattrs);
-    //this.mdnsRegistry.discoverAttributes(dattrs);
+    this.mqttRegistry.discoverAttributes(dattrs);
+    this.mdnsRegistry.discoverAttributes(dattrs);
     this.localRegistry.discoverAttributes(dattrs);
 }
 
 Registrar.prototype.stopDiscoveringAttributes = function(dattrs) {
     dattrs = this._checkAndReformatAttrsToStopDiscovering(dattrs);
-    //this.mqttRegistry.stopDiscoveringAttributes(dattrs);
-    //this.mdnsRegistry.stopDiscoveringAttributes(dattrs);
+    this.mqttRegistry.stopDiscoveringAttributes(dattrs);
+    this.mdnsRegistry.stopDiscoveringAttributes(dattrs);
     this.localRegistry.stopDiscoveringAttributes(dattrs);
 }
 
