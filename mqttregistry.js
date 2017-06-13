@@ -74,7 +74,6 @@ MQTTRegistry.prototype._prepareForEvents = function() {
     /* connect event emitted on successful connection or reconnection */
     this.client.on('connect', function (connack) {
         if (!connack.sessionPresent) {
-            console.log('new session');
             /*
              * session is not present - subscriptions start from scratch but
              * old publications could still be persisted on the broker
@@ -141,9 +140,10 @@ MQTTRegistry.prototype._prepareForEvents = function() {
 
     /* message event received when client receives a published packet */
     this.client.on('message', function (topic, message, packet) {
-        var parsedMsg = JSON.parse(message.toString());
-        if (parsedMsg !== null) {
-            self._handleMessage(self, topic, parsedMsg.payload);
+        // if the message is an empty string, then this is the result of an
+        // "unpublish" and should be ignored
+        if (message.toString() !== '') {
+            self._handleMessage(self, topic, JSON.parse(message.toString()).payload);
         }
     });
 
@@ -455,7 +455,7 @@ MQTTRegistry.prototype.stopDiscoveringAttributes = function(dattrs) {
 
     if (dattrs.device) {
         for (var i = 0; i < dattrs.device.length; i++) {
-            delete this.attrsToSubTo[dattrs.device[i]];
+            delete this.attrsToSubTo.device[dattrs.device[i]];
             if (this.subscribedAttrs.hasOwnProperty(dattrs.device[i])) {
                 this.attrsToUnsubFrom.device[dattrs.device[i]] = null;
                 if (unsubs === null) {
@@ -472,7 +472,7 @@ MQTTRegistry.prototype.stopDiscoveringAttributes = function(dattrs) {
 
     if (dattrs.fog) {
         for (var i = 0; i < dattrs.fog.length; i++) {
-            delete this.attrsToSubTo[dattrs.fog[i]];
+            delete this.attrsToSubTo.fog[dattrs.fog[i]];
             if (this.subscribedAttrs.hasOwnProperty(dattrs.fog[i])) {
                 this.attrsToUnsubFrom.fog[dattrs.fog[i]] = null;
                 if (unsubs === null) {
@@ -489,7 +489,7 @@ MQTTRegistry.prototype.stopDiscoveringAttributes = function(dattrs) {
 
     if (dattrs.cloud) {
         for (var i = 0; i < dattrs.cloud.length; i++) {
-            delete this.attrsToSubTo[dattrs.cloud[i]];
+            delete this.attrsToSubTo.cloud[dattrs.cloud[i]];
             if (this.subscribedAttrs.hasOwnProperty(dattrs.cloud[i])) {
                 this.attrsToUnsubFrom.cloud[dattrs.cloud[i]] = null;
                 if (unsubs === null) {

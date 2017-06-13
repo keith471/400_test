@@ -49,25 +49,53 @@ if (machType === globals.NodeType.DEVICE) {
 //------------------------------------------------------------------------------
 
 if (machType === globals.NodeType.DEVICE) {
+    // we'll have devices announce if they are phones (iphone or android)
+    // we'll say all devices are thermostats too...I know it doesn't make sense but it's just meant
+    // to be demonstrative :P
     if (phoneType === 'iPhone') {
         reggie.addAttributes({
             iPhone: phoneNumber
         });
     } else if (phoneType === 'Android') {
         reggie.addAttributes({
-            android: phoneNumber
+            android: 'psych, get an iPhone!'
         });
+
+        // in 10 seconds, turn this android into an iphone
+        setTimeout(function() {
+            reggie.removeAttributes('android');
+            reggie.addAttributes({
+                iPhone: phoneNumber
+            });
+        }, 1000);
     }
+    reggie.addAttributes({
+        thermostat: function() {
+            // returns some random number, which we'll treat as the temperature
+            return Math.random() * 100;
+        }
+    });
 } else if (machType === globals.NodeType.FOG) {
     // since we'll have clouds discover fogs, we don't need fogs to discover clouds
     reggie.stopDiscoveringAttributes({
         cloud: ['status']
     });
+
+    reggie.discoverAttributes({
+        device: {
+            thermostat: 'thermo'
+        }
+    });
+
+    reggie.on('thermo', function(id, temp) {
+        console.log('DEVICE ' + id + ' is a thermostat with temperature ' + temp);
+    });
 } else {
     // maybe clouds want to discover fogs, and iphone devices
     reggie.discoverAttributes({
         device: {
-            iPhone: 'iPhone'
+            iPhone: 'iPhone',
+            android: 'android'
         },
         fog: {
             status: {
@@ -88,6 +116,10 @@ if (machType === globals.NodeType.DEVICE) {
     reggie.on('iPhone', function(deviceId, phoneNumber) {
         console.log('DEVICE ' + deviceId + ' is an iPhone with number ' + phoneNumber);
     });
+
+    reggie.on('android', function(deviceId, phoneNumber) {
+        console.log('DEVICE ' + deviceId + ' is an Android with number ' + phoneNumber);
+    })
 }
 
 reggie.registerAndDiscover();

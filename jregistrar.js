@@ -442,6 +442,11 @@ Registrar.prototype._checkFormOfAttrsToAdd = function(attrs) {
             throw new Error('the attribute \'' + this.reservedAttrs[i] + '\' is reserved');
         }
     }
+    for (var attr in attrs) {
+        if (attrs[attr] === '') {
+            throw new Error('the attribute ' + attr + ' has an empty string as its value - this is not permitted');
+        }
+    }
 }
 
 Registrar.prototype._reformatAttrsToRemove = function(attrs) {
