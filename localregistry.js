@@ -31,7 +31,10 @@ function LocalRegistry(app, machType, id, port) {
         device: {},
         fog: {},
         cloud: {}
-    }
+    };
+
+    // whether or not scanning and checkins have been started
+    this.started = false;
 }
 
 /* LocalRegistry inherits from Registry */
@@ -55,6 +58,7 @@ LocalRegistry.prototype.registerAndDiscover = function(options) {
     // initialize the local storage
     var self = this;
     this._initLocalStorage(this, function() {
+        self.started = true;
         self._kickStartCheckIns(self);
         self._kickStartScanning(self);
     });
@@ -110,11 +114,19 @@ LocalRegistry.prototype._kickStartCheckIns = function(self) {
     // add attrs
     for (var attr in self.attrsToAdd) {
         if (self.attrsToAdd[attr] instanceof Function) {
-            data[attr] = self.attrsToAdd[attr]();
+            data[attr] = {
+                payload: self.attrsToAdd[attr](),
+                updatedAt: now
+            };
         } else {
-            data[attr] = self.attrsToAdd[attr];
+            data[attr] = {
+                payload: self.attrsToAdd[attr],
+                updatedAt: now
+            };
         }
     }
+    // reset attrsToAdd
+    self.attrsToAdd = {};
 
     self._addNodeToLocalStorage(self, data, 1, function() {
         // check in every so often to indicate that we're still here
@@ -159,9 +171,10 @@ LocalRegistry.prototype._checkIn = function(self, attemptNumber) {
             setTimeout(self._checkIn, self._getWaitTime(attemptNumber), self, attemptNumber + 1);
             return;
         }
+        var now = Date.now();
         var nodes = JSON.parse(self.localStorage.getItem(self.binName));
         // update lastCheckIn field
-        nodes[self.id].lastCheckIn = Date.now();
+        nodes[self.id].lastCheckIn = now;
         // update attributes
         // remove any that need removing
         for (var i = 0; i < self.attrsToRemove.length; i++) {
@@ -172,12 +185,17 @@ LocalRegistry.prototype._checkIn = function(self, attemptNumber) {
         // add any that need adding
         for (var attr in self.attrsToAdd) {
             if (self.attrsToAdd[attr] instanceof Function) {
-                nodes[self.id][attr] = self.attrsToAdd[attr]();
-                // call the function to refresh the value each time (i.e. don't remove the attr from attrsToAdd)
+                nodes[self.id][attr] = {
+                    payload: self.attrsToAdd[attr](),
+                    updatedAt: now
+                };
             } else {
-                nodes[self.id][attr] = self.attrsToAdd[attr];
-                delete self.attrsToAdd[attr];
+                nodes[self.id][attr] = {
+                    payload: self.attrsToAdd[attr],
+                    updatedAt: now
+                };
             }
+            delete self.attrsToAdd[attr];
         }
         self.localStorage.setItem(self.binName, JSON.stringify(nodes));
         lockFile.unlockSync(self.binName);
@@ -239,15 +257,13 @@ LocalRegistry.prototype._makeDiscoveries = function(self, machs, dattrs) {
                     }
                 } else if (machs[machId].createdAt > self.lastScanAt) {
                     // the node is newly online (or was online before the current node went online)
-                    self.emit('discovery', 'status', dattrs[attr].online, machId, machs[machId].status);
+                    self.emit('discovery', 'status', dattrs[attr].online, machId, machs[machId].status.payload);
                     // in case we currently have this node recorded as offline
                     delete self.currentOfflineMachs[machId];
                 }
             } else {
-                if (machs[machId].createdAt > self.lastScanAt) {
-                    if (machs[machId].hasOwnProperty(attr)) {
-                        self.emit('discovery', attr, dattrs[attr], machId, machs[machId][attr]);
-                    }
+                if (machs[machId].hasOwnProperty(attr) && machs[machId][attr].updatedAt > self.lastScanAt) {
+                    self.emit('discovery', attr, dattrs[attr], machId, machs[machId][attr].payload);
                 }
             }
         }
@@ -275,7 +291,9 @@ LocalRegistry.prototype.removeAttributes = function(attrs) {
     for (var i = 0; i < attrs.length; i++) {
         delete this.attrsToAdd[attrs[i]];
     }
-    this.attrsToRemove = this.attrsToRemove.concat(attrs);
+    if (this.started) {
+        this.attrsToRemove = this.attrsToRemove.concat(attrs);
+    }
 }
 
 /**
