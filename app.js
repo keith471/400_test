@@ -44,6 +44,19 @@ if (machType === globals.NodeType.DEVICE) {
     });
 }
 
+// on rare occasions, you might get an error
+reggie.on('error', function(err) {
+    switch(err.name) {
+        case 'permissions_err':
+            console.log(err.message);
+            console.log('Subscriptions: ' + err.value);
+            break;
+        default:
+            console.log('unknown error');
+            break;
+    }
+});
+
 //------------------------------------------------------------------------------
 // Custom attributes/discoveries
 //------------------------------------------------------------------------------

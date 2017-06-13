@@ -200,7 +200,7 @@ MQTTRegistry.prototype._handleMessage = function(self, topic, message) {
 /**
  * Helper for setting up subscriptions to the broker with retries
  */
-MQTTRegistry.prototype._subscribeWithRetries = function(self, dattrs, retries, cb) {
+MQTTRegistry.prototype._subscribeWithRetries = function(self, dattrs, retries) {
     var subs = {};
 
     for (var attr in dattrs.device) {
@@ -216,9 +216,6 @@ MQTTRegistry.prototype._subscribeWithRetries = function(self, dattrs, retries, c
     }
 
     if (Object.keys(subs).length === 0) {
-        if (cb) {
-            cb();
-        }
         return;
     }
 
@@ -227,9 +224,7 @@ MQTTRegistry.prototype._subscribeWithRetries = function(self, dattrs, retries, c
             if (retries !== 0) {
                 setTimeout(self._subscribeWithRetries, constants.mqtt.retryInterval, self, dattrs, retries - 1);
             } else {
-                if (cb) {
-                    cb(err);
-                }
+                self.emit('sub-error', self, dattrs);
             }
         } else {
             // move attrs from attrsToSubTo to subscribedAttrs
@@ -240,12 +235,24 @@ MQTTRegistry.prototype._subscribeWithRetries = function(self, dattrs, retries, c
                 attr = components[3];
                 self.subscribedAttrs[machType][attr] = dattrs[machType][attr];
                 delete self.attrsToSubTo[machType][attr];
+                delete dattrs[machType][attr];
             }
-            if (cb) {
-                cb();
+
+            // report any subscriptions that weren't granted
+            if (Object.keys(dattrs.device).length !== 0 ||
+                Object.keys(dattrs.fog).length !== 0 ||
+                Object.keys(dattrs.cloud).length !== 0) {
+                    self.emit('subs-denied', dattrs);
             }
         }
     });
+}
+
+MQTTRegistry.prototype.subscribe = function(self, dattrs) {
+    if (self.client && self.client.connected) {
+        self._subscribeWithRetries(self, dattrs, constants.mqtt.retries);
+    }
+    // if we're disconnected, then we'll automatically try to subscribe to the attributes when we connect
 }
 
 /**
@@ -273,6 +280,8 @@ MQTTRegistry.prototype._unsubscribeWithRetries = function(self, dattrs, retries)
         if (err) {
             if (retries > 0) {
                 setTimeout(self._unsubscribeWithRetries, constants.mqtt.retryInterval, self, topics, retries - 1);
+            } else {
+                self.emit('unsub-error', self, dattrs);
             }
         } else {
             for (var attr in dattrs.device) {
@@ -291,6 +300,13 @@ MQTTRegistry.prototype._unsubscribeWithRetries = function(self, dattrs, retries)
     });
 }
 
+MQTTRegistry.prototype.unsubscribe = function(self, dattrs) {
+    if (self.client && self.client.connected) {
+        self._unsubscribeWithRetries(self, dattrs, constants.mqtt.retries);
+    }
+    // if we're disconnected, then we'll automatically try to unsubscribe from the attributes when we connect
+}
+
 /**
  * Helper for publishing an attribute with retries
  */
@@ -305,6 +321,8 @@ MQTTRegistry.prototype._publishWithRetries = function(self, attr, value, retries
         if (err) {
             if (retries === 0) {
                 setTimeout(self._publishWithRetries, constants.mqtt.retryInterval, self, attr, value, retries - 1);
+            } else {
+                self.emit('pub-error', self, attr, value);
             }
         } else {
             // move the attribute from attrsToPublish to publishedAttrs
@@ -312,6 +330,13 @@ MQTTRegistry.prototype._publishWithRetries = function(self, attr, value, retries
             delete self.attrsToPublish[attr];
         }
     });
+}
+
+MQTTRegistry.prototype.publish = function(self, attr, value) {
+    if (self.client && self.client.connected) {
+        self._publishWithRetries(self, attr, value, constants.mqtt.retries);
+    }
+    // if we're disconnected, then we'll automatically try to publish the attributes when we connect
 }
 
 /**
@@ -322,6 +347,8 @@ MQTTRegistry.prototype._unpublishWithRetries = function(self, attr, retries) {
         if (err) {
             if (retries > 0) {
                 setTimeout(self._unpublishWithRetries, constants.mqtt.retryInterval, self, attr, retries - 1);
+            } else {
+                self.emit('unpub-error', self, attr);
             }
         } else {
             // remove the attribute from attrsToRemove and publishedAttrs
@@ -329,6 +356,13 @@ MQTTRegistry.prototype._unpublishWithRetries = function(self, attr, retries) {
             delete self.publishedAttrs[attr];
         }
     });
+}
+
+MQTTRegistry.prototype.unpublish = function(self, attr) {
+    if (self.client && self.client.connected) {
+        self._unpublishWithRetries(self, attr, constants.mqtt.retries);
+    }
+    // if we're disconnected, then we'll automatically try to publish the attributes when we connect
 }
 
 /**

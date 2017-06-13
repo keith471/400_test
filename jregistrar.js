@@ -154,9 +154,32 @@ function Registrar(app, machType, id, port) {
     // listen for events from the Registries
     var self = this;
 
+    this.mqttRegistry.on('sub-error', function(self, dattrs) {
+        setTimeout(self.mqttRegistry.subscribe, constants.mqtt.longRetryInterval, self, dattrs);
+    });
+
+    this.mqttRegistry.on('subs-denied', function(self, dattrs) {
+        var err = new Error('MQTT subscriptions denied');
+        err.name = 'permissions_err';
+        err.value = dattrs;
+        self.emit('error', err);
+    });
+
+    this.mqttRegistry.on('unsub-error', function(self, dattrs) {
+        setTimeout(self.mqttRegistry.unsubscribe, constants.mqtt.longRetryInterval, self, dattrs);
+    });
+
+    this.mqttRegistry.on('pub-error', function(self, attr, value) {
+        setTimeout(self.mqttRegistry.publish, constants.mqtt.longRetryInterval, self, attr, value);
+    });
+
+    this.mqttRegistry.on('unpub-error', function(self, attr) {
+        setTimeout(self.mqttRegistry.unpublish, constants.mqtt.longRetryInterval, self, attr);
+    });
+
     this.mdnsRegistry.on('ad-error', function(self, attr, adName, txtRecord) {
         // an ad failed - try again after some time
-        setTimeout(this.mdnsRegistry._createAdvertisementWithRetries, constants.mdns.longRetryInterval, self, attr, adName, txtRecord, 0);
+        setTimeout(self.mdnsRegistry._createAdvertisementWithRetries, constants.mdns.longRetryInterval, self, attr, adName, txtRecord, 0);
     });
 
     this.mdnsRegistry.on('browser-error', function(self, attr, machType, event) {

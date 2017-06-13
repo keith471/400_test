@@ -21,8 +21,7 @@ module.exports = Object.freeze({
             DEFAULT: 0,
             LOCAL: 1
         },
-        localhost: '127.0.0.1',
-        retryInterval: 30000 // 30 seconds for testing; a better value is probably on the order of a few minutes
+        localhost: '127.0.0.1'
     },
 
     mqtt: {
@@ -30,6 +29,7 @@ module.exports = Object.freeze({
         connectionTimeout: 10000, // 10 seconds
         retries: 5,
         retryInterval: 2000, // 2 seconds
+        longRetryInterval: 60000, // 1 minute
         brokerUrl: 'tcp://localhost:1883'
     },
 
