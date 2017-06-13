@@ -106,8 +106,8 @@ MDNSRegistry.prototype._handleError = function(self, err, ad, attr, adName, txtR
                 logger.log.warning('Exhaused all advertisement retries.');
                 // make sure the ad is stopped
                 ad.stop();
-                // TODO replace by emitting the specific ad that failed - so that it can be retried later
-                // self.emit('error');
+                // emit the ad info, so the registrar can decide if it wants to retry later
+                self.emit('ad-error', self, attr, addName, txtRecord);
             } else {
                 setTimeout(self._createAdvertisementWithRetries, constants.mdns.retryInterval, self, attr, adName, txtRecord, retries - 1);
             }
@@ -116,8 +116,7 @@ MDNSRegistry.prototype._handleError = function(self, err, ad, attr, adName, txtR
             logger.log.error('Unhandled service error: ' + err);
             // make sure the ad is stopped
             ad.stop();
-            // TODO replace by emitting the specific ad that failed - so that it can be retried later
-            //self.emit('error');
+            self.emit('ad-error', self, attr, addName, txtRecord);
     }
 }
 
@@ -132,9 +131,9 @@ MDNSRegistry.prototype._browseForAttributes = function(dattrs) {
     for (var attr in dattrs.device) {
         if (!this.browsers.device[attr]) {
             if (attr === 'status') {
-                this._browseForStatus(constants.globals.NodeType.DEVICE, dattrs.device.status);
+                this._browseForStatus(this, constants.globals.NodeType.DEVICE, dattrs.device.status);
             } else {
-                this._browse(attr, constants.globals.NodeType.DEVICE, dattrs.device[attr]);
+                this._browse(this, attr, constants.globals.NodeType.DEVICE, dattrs.device[attr]);
             }
         } else {
             this.browsers.device[attr].start();
@@ -144,9 +143,9 @@ MDNSRegistry.prototype._browseForAttributes = function(dattrs) {
     for (var attr in dattrs.fog) {
         if (!this.browsers.fog[attr]) {
             if (attr === 'status') {
-                this._browseForStatus(constants.globals.NodeType.FOG, dattrs.fog.status);
+                this._browseForStatus(this, constants.globals.NodeType.FOG, dattrs.fog.status);
             } else {
-                this._browse(attr, constants.globals.NodeType.FOG, dattrs.fog[attr]);
+                this._browse(this, attr, constants.globals.NodeType.FOG, dattrs.fog[attr]);
             }
         } else {
             this.browsers.fog[attr].start();
@@ -156,9 +155,9 @@ MDNSRegistry.prototype._browseForAttributes = function(dattrs) {
     for (var attr in dattrs.cloud) {
         if (!this.browsers.cloud[attr]) {
             if (attr === 'status') {
-                this._browseForStatus(constants.globals.NodeType.CLOUD, dattrs.cloud.status);
+                this._browseForStatus(this, constants.globals.NodeType.CLOUD, dattrs.cloud.status);
             } else {
-                this._browse(attr, constants.globals.NodeType.CLOUD, dattrs.cloud[attr]);
+                this._browse(this, attr, constants.globals.NodeType.CLOUD, dattrs.cloud[attr]);
             }
         } else {
             this.browsers.cloud[attr].start();
@@ -169,12 +168,10 @@ MDNSRegistry.prototype._browseForAttributes = function(dattrs) {
 /**
  * Prep a browser to browse for any attibute except for status
  */
-MDNSRegistry.prototype._browse = function(attr, machType, event) {
-    var browser = mdns.createBrowser(mdns.tcp(this.app + '-' + machType + '-' + attr));
+MDNSRegistry.prototype._browse = function(self, attr, machType, event) {
+    var browser = mdns.createBrowser(mdns.tcp(self.app + '-' + machType + '-' + attr));
 
-    this.browsers[machType][attr] = browser;
-
-    var self = this;
+    self.browsers[machType][attr] = browser;
 
     browser.on('serviceUp', function(service) {
         // ignore our own services
@@ -186,18 +183,21 @@ MDNSRegistry.prototype._browse = function(attr, machType, event) {
         self.emit('discovery', attr, event, service.name, JSON.parse(service.txtRecord.msg).payload);
     });
 
+    browser.on('error', function(err) {
+        browser.stop();
+        self.emit('browser-error', self, attr, machType, event);
+    });
+
     browser.start();
 }
 
 /**
  * Prep a browser to browse for the status attribute
  */
-MDNSRegistry.prototype._browseForStatus = function(machType, events) {
-    var browser = mdns.createBrowser(mdns.tcp(this.app + '-' + machType + '-status'));
+MDNSRegistry.prototype._browseForStatus = function(self, machType, events) {
+    var browser = mdns.createBrowser(mdns.tcp(self.app + '-' + machType + '-status'));
 
-    this.browsers[machType].status = browser;
-
-    var self = this;
+    self.browsers[machType].status = browser;
 
     browser.on('serviceUp', function(service) {
         // ignore our own services
@@ -211,6 +211,11 @@ MDNSRegistry.prototype._browseForStatus = function(machType, events) {
 
     browser.on('serviceDown', function(service) {
         self.emit('discovery', 'status', events.offline, service.name, 'offline');
+    });
+
+    browser.on('error', function(err) {
+        browser.stop();
+        self.emit('browser-error', self, 'status', machType, events);
     });
 
     browser.start();

@@ -1,5 +1,6 @@
 var EventEmitter = require('events'),
     globals = require('./constants').globals,
+    constants = require('./constants'),
     MQTTRegistry = require('./mqttregistry'),
     MDNSRegistry = require('./mdnsregistry'),
     LocalRegistry = require('./localregistry'),
@@ -152,6 +153,20 @@ function Registrar(app, machType, id, port) {
 
     // listen for events from the Registries
     var self = this;
+
+    this.mdnsRegistry.on('ad-error', function(self, attr, adName, txtRecord) {
+        // an ad failed - try again after some time
+        setTimeout(this.mdnsRegistry._createAdvertisementWithRetries, constants.mdns.longRetryInterval, self, attr, adName, txtRecord, 0);
+    });
+
+    this.mdnsRegistry.on('browser-error', function(self, attr, machType, event) {
+        // a browser failed - try again after some time
+        if (attr === 'status') {
+            setTimeout(this.mdnsRegistry._browseForStatus, constants.mdns.longRetryInterval, self, machType, event);
+        } else {
+            setTimeout(this.mdnsRegistry._browse, constants.mdns.longRetryInterval, self, attr, machType, event);
+        }
+    });
 
     // listen for discoveries via MQTT, mDNS, or local storage
     this.mqttRegistry.on('discovery', function(attr, event, nodeId, value) {

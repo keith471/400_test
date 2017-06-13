@@ -36,7 +36,7 @@ module.exports = Object.freeze({
     mdns: {
         retries: 5,
         retryInterval: 2000, // 2 seconds
-        ipCheckInterval: 120000, // 2 minutes (unlikely for IP on LAN to change)
+        longRetryInterval: 60000 // 1 minute
     },
 
     localStorage: {
