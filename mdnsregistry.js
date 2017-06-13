@@ -60,7 +60,7 @@ MDNSRegistry.prototype._createAdvertisements = function(attrs) {
             this.ads[attr].stop();
             delete this.ads[attr];
         }
-        var adName = this.app + '-' + this.machType + '-' + attr;
+        var adName = this.app + '-' + this.machType[0] + '-' + attr;
         var txtRecord;
         if (attrs[attr] instanceof Function) {
             txtRecord = {
@@ -169,7 +169,7 @@ MDNSRegistry.prototype._browseForAttributes = function(dattrs) {
  * Prep a browser to browse for any attibute except for status
  */
 MDNSRegistry.prototype._browse = function(self, attr, machType, event) {
-    var browser = mdns.createBrowser(mdns.tcp(self.app + '-' + machType + '-' + attr));
+    var browser = mdns.createBrowser(mdns.tcp(self.app + '-' + machType[0] + '-' + attr));
 
     self.browsers[machType][attr] = browser;
 
@@ -195,7 +195,7 @@ MDNSRegistry.prototype._browse = function(self, attr, machType, event) {
  * Prep a browser to browse for the status attribute
  */
 MDNSRegistry.prototype._browseForStatus = function(self, machType, events) {
-    var browser = mdns.createBrowser(mdns.tcp(self.app + '-' + machType + '-status'));
+    var browser = mdns.createBrowser(mdns.tcp(self.app + '-' + machType[0] + '-status'));
 
     self.browsers[machType].status = browser;
 
@@ -220,30 +220,6 @@ MDNSRegistry.prototype._browseForStatus = function(self, machType, events) {
 
     browser.start();
 }
-
-/**
- * Parses and returns an IPv4 address from an array of addresses (that can be parsed from an MDNS advertisement)
- */
-/*
-MDNSRegistry.prototype._getIp = function(addresses) {
-    for (var i = 0; i < addresses.length; i++) {
-        var parts = addresses[i].split('.');
-        if (parts.length === 4) {
-            var valid = true;
-            for (var j = 0; j < 4; j++) {
-                var num = parseInt(parts[j]);
-                if (isNaN(num) || (num < 0 || num > 255)) {
-                    break;
-                }
-            }
-            if (valid) {
-                return addresses[i];
-            }
-        }
-    }
-    return null;
-}
-*/
 
 //==============================================================================
 // Add and discover attributes

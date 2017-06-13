@@ -7,7 +7,7 @@ var Registrar = require('./jregistrar'),
 var machType = process.argv[2],
     phoneType = process.argv[3],
     phoneNumber = process.argv[4],
-    app = 'myappppp',
+    app = 'pppppppppppppppppppppppppppppppppppppppppppp',
     port = 1337,
     id = uuid();
 
