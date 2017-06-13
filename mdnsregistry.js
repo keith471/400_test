@@ -15,6 +15,13 @@ function MDNSRegistry(app, machType, id, port) {
         fog: {},
         cloud: {}
     };
+    this.started = false;
+    this.attrs = {};
+    this.attrsToDiscover = {
+        device: {},
+        fog: {},
+        cloud: {}
+    }
 }
 
 /* MDNSRegistry inherits from Registry */
@@ -22,15 +29,21 @@ MDNSRegistry.prototype = Object.create(Registry.prototype);
 MDNSRegistry.prototype.constructor = MDNSRegistry;
 
 MDNSRegistry.prototype.registerAndDiscover = function(options) {
-    // add any new attributes or desired discoveries to the existing ones
-    if (options !== undefined) {
-        this.addAttributes(options.attrsToAdd);
-        this.addAttributesToDiscover(options.attrsToDiscover);
-    }
+    this.started = true;
 
-    // TODO fix
-    this._createAdvertisements(this.attributes);
-    this._browseForAttributes(this.attributesToDiscover);
+    // start any ads and browsers created before this function was called
+    this.addAttributes(this.attrs);
+    this.discoverAttributes(this.attrsToDiscover);
+
+    // add any new attributes or desired discoveries
+    if (options) {
+        if (options.attrsToAdd) {
+            this.addAttributes(options.attrsToAdd);
+        }
+        if (options.attrsToDiscover) {
+            this.discoverAttributes(options.attrsToDiscover);
+        }
+    }
 }
 
 //------------------------------------------------------------------------------
@@ -235,20 +248,32 @@ MDNSRegistry.prototype._getIp = function(addresses) {
  * Just an alias for _createAdertisements, i.e. adds attributes by starting ads
  */
 MDNSRegistry.prototype.addAttributes = function(attrs) {
-    this._createAdvertisements(attrs);
+    if (this.started) {
+        this._createAdvertisements(attrs);
+    } else {
+        for (var attr in attrs) {
+            this.attrs[attr] = attrs[attr];
+        }
+    }
 }
 
 /**
  * Removes attributes by stopping the advertisements
  */
 MDNSRegistry.prototype.removeAttributes = function(attrs) {
-    for (var i = 0; i < attrs.length; i++) {
-        // stop and remove the advertisement
-        if (this.ads[attrs[i]]) {
-            this.ads[attrs[i]].stop();
-            // we delete the ad object because even if we start advertising with the
-            // same service name in the future, the value we advertise may be different
-            delete this.ads[attrs[i]];
+    if (this.started) {
+        for (var i = 0; i < attrs.length; i++) {
+            // stop and remove the advertisement
+            if (this.ads[attrs[i]]) {
+                this.ads[attrs[i]].stop();
+                // we delete the ad object because even if we start advertising with the
+                // same service name in the future, the value we advertise may be different
+                delete this.ads[attrs[i]];
+            }
+        }
+    } else {
+        for (var i = 0; i < attrs.length; i++) {
+            delete this.attrs[attrs[i]];
         }
     }
 }
@@ -257,7 +282,19 @@ MDNSRegistry.prototype.removeAttributes = function(attrs) {
  * Alias for _browseForAttributes, i.e. discovers attributes by starting browsers
  */
 MDNSRegistry.prototype.discoverAttributes = function(dattrs) {
-    this._browseForAttributes(dattrs);
+    if (this.started) {
+        this._browseForAttributes(dattrs);
+    } else {
+        for (var attr in dattrs.device) {
+            this.attrsToDiscover.device[attr] = dattrs.device[attr];
+        }
+        for (var attr in dattrs.fog) {
+            this.attrsToDiscover.fog[attr] = dattrs.fog[attr];
+        }
+        for (var attr in dattrs.cloud) {
+            this.attrsToDiscover.cloud[attr] = dattrs.cloud[attr];
+        }
+    }
 }
 
 /**
@@ -266,20 +303,38 @@ MDNSRegistry.prototype.discoverAttributes = function(dattrs) {
 MDNSRegistry.prototype.stopDiscoveringAttributes = function(dattrs) {
     if (dattrs.device) {
         for (var i = 0; i < dattrs.device.length; i++) {
-            // stop the browser
-            this.browsers.device[dattrs.device[i]].stop();
+            if (this.started) {
+                // stop the browser
+                if (this.browsers.device[dattrs.device[i]]) {
+                    this.browsers.device[dattrs.device[i]].stop();
+                }
+            } else {
+                delete this.attrsToDiscover.device[dattrs.device[i]];
+            }
         }
     }
 
     if (dattrs.fog) {
         for (var i = 0; i < dattrs.fog.length; i++) {
-            this.browsers.fog[dattrs.fog[i]].stop();
+            if (this.started) {
+                if (this.browsers.fog[dattrs.fog[i]]) {
+                    this.browsers.fog[dattrs.fog[i]].stop();
+                }
+            } else {
+                delete this.attrsToDiscover.fog[dattrs.fog[i]];
+            }
         }
     }
 
     if (dattrs.cloud) {
         for (var i = 0; i < dattrs.cloud.length; i++) {
-            this.browsers.cloud[dattrs.cloud[i]].stop();
+            if (this.started) {
+                if (this.browsers.cloud[dattrs.cloud[i]]) {
+                    this.browsers.cloud[dattrs.cloud[i]].stop();
+                }
+            } else {
+                delete this.attrsToDiscover.cloud[dattrs.cloud[i]];
+            }
         }
     }
 }

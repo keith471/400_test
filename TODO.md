@@ -1,7 +1,6 @@
 # TODO
 
 - TEST!!!
-    - test rest of api functions like add and remove attributes, stop discovering, etc.
 
 - add option to announce a changing attribute on a timer
 
@@ -21,13 +20,5 @@
             - the mqtt message
             - the mdns JSON.stringified `name` field that can be passed when creating an advertisement
             - the local storage value of the <attr, value> pair
-
-**LocalRegistry**
-
-**MDNSRegistry**
-
-**MQTTRegistry**
-
-**Registrar**
 
 - Contact mDNS guy regarding 15 character service type limitation
