@@ -43,8 +43,6 @@ LocalRegistry.prototype.constructor = LocalRegistry;
 
 /**
  * API for local storage registration/discovery
- * TODO: This function should only ever be called once, just to avoid reinitialization of this.localStorage
- * (though I don't think reinitialization would cause any issues...)
  */
 LocalRegistry.prototype.registerAndDiscover = function(options) {
     if (options !== undefined) {
@@ -55,13 +53,15 @@ LocalRegistry.prototype.registerAndDiscover = function(options) {
         this.discoverAttributes(options.attrsToDiscover);
     }
 
-    // initialize the local storage
-    var self = this;
-    this._initLocalStorage(this, function() {
-        self.started = true;
-        self._kickStartCheckIns(self);
-        self._kickStartScanning(self);
-    });
+    if (!this.started) {
+        // initialize the local storage
+        var self = this;
+        this._initLocalStorage(this, function() {
+            self.started = true;
+            self._kickStartCheckIns(self);
+            self._kickStartScanning(self);
+        });
+    }
 }
 
 LocalRegistry.prototype._initLocalStorage = function(self, cb) {
